@@ -36,7 +36,8 @@ OneNote pages used to run a weekly album club, and documenting each step as it's
 - **Member names in public posts and data:** first name + last initial (e.g. "Scott R").
   No dates of birth.
 - **OneNote extraction** is written from scratch in post 3.
-- **Branching:** one feature branch per post, PR'd into `v2-from-scratch`. CI deploys prod
+- **Branching:** one `post-NN-*` branch per post, fast-forward merged into `v2-from-scratch`
+  (solo project, so no PRs). CI checks run on pushes to `post-*` branches; CI deploys prod
   from `v2-from-scratch` until it merges into `main`.
 
 ## Housekeeping (not blog posts)

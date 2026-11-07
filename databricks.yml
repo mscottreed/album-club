@@ -13,6 +13,9 @@ variables:
     description: The catalog to use
   schema:
     description: The schema to use
+  ci_service_principal:
+    description: Application ID of the album-club-ci service principal that GitHub Actions deploys prod as
+    default: fc6dd84e-5cda-40d2-81db-865f13b5b731
 
 targets:
   dev:
@@ -31,11 +34,17 @@ targets:
     mode: production
     workspace:
       host: https://dbc-eebf3c2f-dab5.cloud.databricks.com
-      # We explicitly deploy to the deploying user's folder to make sure we only have a single copy.
-      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+      # Prod always lives in the CI service principal's folder, whoever deploys it,
+      # so there's only ever one copy.
+      root_path: /Workspace/Users/${var.ci_service_principal}/.bundle/${bundle.name}/${bundle.target}
+    # Jobs run as the CI service principal, not as whoever deployed them.
+    run_as:
+      service_principal_name: ${var.ci_service_principal}
     variables:
       catalog: workspace
       schema: prod
     permissions:
-      - user_name: ${workspace.current_user.userName}
+      - service_principal_name: ${var.ci_service_principal}
+        level: CAN_MANAGE
+      - group_name: admins
         level: CAN_MANAGE
