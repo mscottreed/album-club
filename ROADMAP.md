@@ -6,7 +6,7 @@ OneNote pages used to run a weekly album club, and documenting each step as it's
 ## Ground rules
 
 - **Nothing lives in Databricks that isn't in git.** Every job, pipeline, schema, volume
-  and dashboard is a Databricks Asset Bundle resource, deployed with `databricks bundle deploy`.
+  and dashboard is a Declarative Automation Bundle resource (formerly Databricks Asset Bundles), deployed with `databricks bundle deploy`.
   No clicking things into existence in the UI.
 - **Dev and prod are separate schemas** in the single `workspace` catalog (Free Edition limit).
 - **One post = one tag.** Each post ships with a git tag (`post-01`, `post-02`, …) so readers
@@ -24,7 +24,9 @@ OneNote pages used to run a weekly album club, and documenting each step as it's
 | 4 | **Parsing and cleaning into silver** | Pure-Python HTML parser with local unit tests, run inside a Lakeflow Declarative Pipeline with expectations. Silver tables: `meetings`, `albums`, `ratings`, `members`. Member alias map as a seed file in the repo, stable IDs, handling non-numeric ratings. |
 | 5 | **Enrichment** | Album catalog seed data. Track listings and release dates from Spotify or MusicBrainz, running unattended, with ambiguous matches routed to a review table. |
 | 6 | **Gold tables and a dashboard** | Per-member stats, top-rated albums, trends over time. AI/BI dashboard as a `.lvdash.json` bundle resource. |
-| 7 | **Running it weekly** | Scheduled job that runs the whole chain, so a new meeting page reaches the dashboard without manual steps. |
+| 7 | **An app for entering this week's ratings** | Databricks App (bundle resource) for the host to record a meeting: album, date, each member's score and favorite songs. Where app writes land (Delta table vs. Lakebase) and how they flow into silver alongside OneNote history. |
+| 8 | **An app for members to edit their own ratings** | Second app (or a second mode of the first) where each member sees and corrects only their own scores, using the app's knowledge of who is signed in. |
+| 9 | **Running it weekly** | Scheduled job that runs the whole chain, so a new meeting reaches the dashboard without manual steps. |
 | — | **Possible extras** | Genie space ("who rates 70s prog highest?"), recommendations, a look back at the series. |
 
 ## Decisions
@@ -34,6 +36,8 @@ OneNote pages used to run a weekly album club, and documenting each step as it's
 - **Member names in public posts and data:** first name + last initial (e.g. "Scott R").
   No dates of birth.
 - **OneNote extraction** is written from scratch in post 3.
+- **Branching:** one feature branch per post, PR'd into `v2-from-scratch`. CI deploys prod
+  from `v2-from-scratch` until it merges into `main`.
 
 ## Housekeeping (not blog posts)
 
@@ -43,7 +47,9 @@ OneNote pages used to run a weekly album club, and documenting each step as it's
 
 ## Open questions
 
-- Which branch does CI deploy to prod from? The series is built on `v2-from-scratch`, so
-  "deploy on merge to `main`" wouldn't fire until the end. Likely answer: one feature
-  branch per post, PR'd into `v2-from-scratch`, which acts as the prod branch until it
-  merges into `main`.
+- **Apps on Free Edition:** apps stop 24 hours after starting and must be restarted (maybe
+  by a scheduled job before each meeting). Max 3 apps per account.
+- **Who can use the apps:** members need to sign in to the workspace to use an app. Can
+  Free Edition add other users, and does everyone want a Databricks login?
+- **Source of truth going forward:** once ratings are entered in the app, does OneNote become
+  history only (one-time import), or do both keep running?

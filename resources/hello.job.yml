@@ -1,0 +1,15 @@
+resources:
+  jobs:
+    hello:
+      name: hello
+      tasks:
+        - task_key: hello
+          spark_python_task:
+            python_file: ../src/hello.py
+          environment_key: serverless
+      environments:
+        - environment_key: serverless
+          spec:
+            # Serverless environment version: pins Python, preinstalled libraries and Databricks Connect.
+            # See https://docs.databricks.com/aws/en/release-notes/serverless/environment-version/
+            environment_version: "6"
