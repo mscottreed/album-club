@@ -4,7 +4,7 @@ Every album club meeting since 2021 has a page in one OneNote section called Mus
 a table of everyone's ratings and favorite tracks, and whatever notes I pasted in about the band.
 This post gets those pages into Databricks. By the end there's a bronze table with one row per
 OneNote page, holding the page exactly as OneNote wrote it, and every piece of Databricks setup
-behind it is in the bundle.
+behind it is in the bundle except for one grant.
 
 The code for this post is tagged `post-03` in
 [mscottreed/album-club](https://github.com/mscottreed/album-club).
@@ -293,8 +293,73 @@ list of albums from 2016, years before the club started. Sorting that out is pos
 
 ## Prod
 
-<!-- TODO: fill in after merging to v2-from-scratch — CI deploy output, upload to the prod
-volume, prod pipeline run, row count. -->
+Fast-forwarding `v2-from-scratch` ran the checks and then the deploy, and the deploy failed:
+
+```text
+Error: cannot create resources.schemas.album_club: Principal 'album-club-ci' does not have CREATE SCHEMA on Catalog 'workspace'. (403 PERMISSION_DENIED)
+```
+
+In dev, the bundle deploys as me, and I'm a workspace admin. In prod it deploys as the service
+principal, which only had `USE CATALOG`, the privilege every workspace user gets on `workspace`.
+The catalog isn't a bundle resource, so this grant is a one-time command, like creating the
+service principal in part 2:
+
+```bash
+databricks grants update catalog workspace --json '{"changes": [{"principal": "fc6dd84e-5cda-40d2-81db-865f13b5b731", "add": ["CREATE_SCHEMA"]}]}'
+```
+
+Re-running the failed job created everything:
+
+```text
+Created schemas.album_club
+Created volumes.onenote_exports
+Created pipelines.album_club_pipeline
+Created pipelines.album_club_pipeline.permissions
+Resources: 4 created, 0 changed, 0 deleted, 2 unchanged
+```
+
+### Access to the prod schema
+
+The service principal created the prod schema, so it owns it, and my upload to the prod volume
+was refused:
+
+```text
+Error: User does not have USE SCHEMA privilege on SCHEMA 'workspace.album_club'.
+```
+
+The fix is a `grants` block on the schema in `resources/album_club.yml`. Grants on a schema
+apply to its volumes and tables, so one block covers uploading exports and querying tables:
+
+```yaml
+  schemas:
+    album_club:
+      ...
+      grants:
+        - principal: account users
+          privileges: [USE_SCHEMA, SELECT, READ_VOLUME, WRITE_VOLUME]
+```
+
+The grant goes to `account users` rather than to me by name, which keeps my email out of the
+repo. A narrower group wasn't available. Unity Catalog only accepts account-level groups, so the
+workspace's `admins` and `users` groups are out. It refused the system-generated workspace admins
+group outright, and Free Edition refuses the account-level identity APIs (part 2), so I can't
+create an account group. On Free Edition, `account users` is just me and the service principal.
+
+With the grant deployed, I uploaded the same export to the prod volume and ran the prod
+pipeline:
+
+```bash
+databricks fs cp data/onenote-export/Music.mht \
+  dbfs:/Volumes/workspace/album_club/onenote_exports/music-2026-11-07.mht
+databricks bundle run -t prod album_club_pipeline
+```
+
+I started the run, but the pipeline runs as the service principal, like the `hello` job in
+part 2, and the service principal owns the bronze table. Prod has the same 272 pages as dev.
+
+The upload is the one step in prod that doesn't go through CI. The bundle defines where the
+export goes, but the file itself has names and ratings in it, so it goes from my laptop straight
+to the volume.
 
 ## Next: parsing into silver
 
