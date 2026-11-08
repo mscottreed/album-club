@@ -6,6 +6,12 @@ on my laptop having whatever I last checked out. In this post, GitHub Actions ta
 push gets checked, and a push to the main branch deploys to prod. From here on, nothing reaches
 prod except through this pipeline.
 
+As a side note I always try to build my projects like this, a hello world and a deployment
+as the first few steps. It has two benefits: 1) If you are paying for the infrastructure it puts
+the pressure on to get something usable out the door, and 2) deploying manually can become a
+habit that takes time away from working on the project, so it is better to stop it before it
+starts.
+
 The code for this post is tagged `post-02` in
 [mscottreed/album-club](https://github.com/mscottreed/album-club).
 
@@ -272,6 +278,5 @@ while I work, and `hello`, which only CI deploys.
 
 ## Next: getting the data out of OneNote
 
-The pipeline has nothing to carry yet. Post 3 pulls the album club pages out of OneNote with the
-Microsoft Graph API and lands them in Databricks as a bronze table, and every step of it will ship
-through this workflow.
+The pipeline has nothing to carry yet. Post 3 pulls the album club pages out of OneNote and into
+Databricks as a bronze table, and every step of it will ship through this workflow.

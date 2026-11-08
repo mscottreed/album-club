@@ -51,8 +51,8 @@ that shape this project are:
 - Daily usage quotas. Go over and compute shuts off until the quota resets. Your data stays.
 - One SQL warehouse, 2X-Small. Enough for a dashboard over a few thousand rows.
 - One active pipeline per pipeline type, and at most 5 concurrent job tasks.
-- Outbound internet access is limited to trusted domains. This one will matter when we pull
-  data from Microsoft's OneNote API in post 3.
+- Outbound internet access is limited to trusted domains. This one will matter when we call
+  the Spotify API in post 5.
 - No commercial use, which is fine for an album club.
 
 Free Edition also gives you a single catalog, `workspace`, so instead of separate dev and prod

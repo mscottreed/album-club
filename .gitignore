@@ -8,3 +8,7 @@ scratch/**
 !scratch/README.md
 **/explorations/**
 **/!explorations/README.md
+
+# Raw album club data (names, ratings) never goes in git
+data/
+.DS_Store
