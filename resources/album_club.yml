@@ -4,6 +4,12 @@ resources:
       catalog_name: ${var.catalog}
       name: album_club
       comment: Album club data, from raw OneNote exports to gold tables.
+      # In prod the CI service principal owns the schema, so people need a grant to upload
+      # exports and query tables. Grants on a schema apply to its volumes and tables too.
+      # On Free Edition, 'account users' is just me and the CI service principal.
+      grants:
+        - principal: account users
+          privileges: [USE_SCHEMA, SELECT, READ_VOLUME, WRITE_VOLUME]
 
   volumes:
     onenote_exports:
