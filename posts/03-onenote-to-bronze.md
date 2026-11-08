@@ -16,7 +16,7 @@ Databricks app. So OneNote only matters for history, and the history only has to
 There's no need for the Microsoft Graph API, an app registration or a scheduled sync when a
 manual export does the job.
 
-The catch is where you can export from. OneNote for Mac only saves pages as PDF, and a PDF turns
+Unfortunately, there are many different versions of OneNote, and they differ in export functionality.  OneNote for Mac only saves pages as PDF.  A PDF turns
 a ratings table into loosely positioned text. Windows OneNote has more options under
 **File > Export**:
 
@@ -27,8 +27,7 @@ a ratings table into loosely positioned text. Windows OneNote has more options u
 | Word (`.docx`) | Readable, but harder to tell where one page ends and the next starts |
 | Single File Web Page (`.mht`) | HTML, with real tables and links |
 
-I exported the whole Music section from Windows as a Single File Web Page. It came out as one
-103 MB `.mht` file.
+Luckily, I have both Mac and Windows laptops, and so I exported the whole Music section from Windows as a Single File Web Page. It came out as one 103 MB `.mht` file.
 
 An `.mht` file is a MIME archive, the same format as an email with attachments. This one has a
 single HTML document (12 MB) holding every page, plus 623 images: album covers, band photos and
