@@ -273,7 +273,25 @@ tracks the version we played had.
 
 ## Prod
 
-<!-- TODO: fill in after merging to v2-from-scratch: CI deploy, prod pipeline run, row counts. -->
+Fast-forwarding `v2-from-scratch` ran the checks and the deploy:
+
+```text
+Files: 39 uploaded, 0 deleted
+Resources: 0 created, 0 changed, 0 deleted, 7 unchanged
+```
+
+No resources changed. The pipeline already picks up everything in `src/pipeline/`, so
+`silver.py` is just another file in the upload, and so are the seeds. The export from part 3 was
+already in the prod volume, so there was nothing to upload by hand either. I ran the prod
+pipeline:
+
+```bash
+databricks bundle run -t prod album_club_pipeline
+```
+
+Prod has the same row counts as dev in every silver table, and `silver_review` is empty there
+too. The `account users` grant from part 3 covers new tables in the schema, so I could query them
+without another grant.
 
 ## Next: enrichment
 
