@@ -11,6 +11,9 @@ include:
 variables:
   catalog:
     description: The catalog to use
+  secret_scope:
+    description: Secret scope for API credentials
+    default: album_club
   ci_service_principal:
     description: Application ID of the album-club-ci service principal that GitHub Actions deploys prod as
     default: fc6dd84e-5cda-40d2-81db-865f13b5b731
@@ -27,6 +30,7 @@ targets:
       host: https://dbc-eebf3c2f-dab5.cloud.databricks.com
     variables:
       catalog: workspace
+      secret_scope: dev_${workspace.current_user.short_name}_album_club
   prod:
     mode: production
     workspace:

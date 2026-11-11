@@ -77,6 +77,14 @@ def tracks_played(html: str) -> list[int]:
     return [int(n) for n in first.split(",")] if re.fullmatch(r"\d+(\s*,\s*\d+)+", first) else []
 
 
+SPOTIFY_TRACK_LINK = re.compile(r"open\.spotify\.com/(?:intl-[a-z-]+/)?track/([A-Za-z0-9]{22})")
+
+
+def spotify_track_ids(html: str) -> list[str]:
+    """Spotify track IDs linked from the page, in page order, without repeats."""
+    return list(dict.fromkeys(SPOTIFY_TRACK_LINK.findall(html)))
+
+
 # The meeting date, when it's written, sits right before the ratings table: "Sunday June 30th, 2024".
 TABLE_DATE = re.compile(
     r"(?:(Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,? )?"
@@ -130,6 +138,7 @@ def parse_meeting_page(
         "created_at": created_at,
         "body_date": date,
         "tracks_played": tracks_played(html),
+        "spotify_track_ids": spotify_track_ids(html),
         "responses": _responses(meeting["week"], table, people, favorites_overrides) if table else [],
         "review_reasons": review,
     }

@@ -29,7 +29,7 @@ def tracks(pairs):
     return [track for _, track in pairs]
 
 
-@pytest.mark.parametrize("text", ["", "None", "none", "X", "no standouts"])
+@pytest.mark.parametrize("text", ["", "0", "None", "none", "X", "no standouts"])
 def test_no_favorites(text):
     fav = parse_favorites(text)
     assert (fav.ranked, fav.likes_rest, fav.excluded, fav.review_reasons) == ([], False, [], [])

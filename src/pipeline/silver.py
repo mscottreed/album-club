@@ -23,7 +23,7 @@ RESPONSE = (
 )
 MEETING_PAGE = (
     "struct<week:int, list_number:int, year:int, artist:string, album:string, created_at:timestamp, "
-    f"body_date:date, tracks_played:array<int>, responses:array<{RESPONSE}>, review_reasons:array<string>>"
+    f"body_date:date, tracks_played:array<int>, spotify_track_ids:array<string>, responses:array<{RESPONSE}>, review_reasons:array<string>>"
 )
 # The workers that run UDFs can't import album_club, so ship its code with each function instead.
 cloudpickle.register_pickle_by_value(album_club)
@@ -133,6 +133,7 @@ def silver_listens():
         "year",
         F.col("list_number").alias("list_number_in_title"),
         "tracks_played",
+        "spotify_track_ids",
     )
     playlists = (
         spark.read.table("responses")  # noqa: F821
@@ -148,6 +149,7 @@ def silver_listens():
             F.lit(None).cast("int").alias("year"),
             F.lit(None).cast("int").alias("list_number_in_title"),
             F.array().cast("array<int>").alias("tracks_played"),
+            F.array().cast("array<string>").alias("spotify_track_ids"),
         )
     )
     order = Window.partitionBy("week").orderBy(F.col("listen"), "page_number")  # albums first, then playlist
@@ -222,4 +224,17 @@ def silver_review():
         .where("review_reason IS NOT NULL")
         .select("week", F.lit(None).cast("string").alias("person"), F.col("review_reason").alias("reason"))
     )
-    return pages.unionByName(responses).unionByName(dates)
+    matches = spark.read.table("silver_album_matches").select(  # noqa: F821
+        "week", F.lit(None).cast("string").alias("person"), F.explode("review_reasons").alias("reason")
+    )
+    # Track numbers the chosen edition doesn't have (a listen with no edition is flagged once, above).
+    listens_with_tracks = spark.read.table("silver_tracks").select("listen_id").distinct()  # noqa: F821
+    missing_tracks = (
+        spark.read.table("silver_track_picks")  # noqa: F821
+        .where("position IS NULL")
+        .join(listens_with_tracks, "listen_id", "left_semi")
+        .groupBy("week", "person")
+        .agg(F.array_join(F.collect_list(F.concat_ws("-", "disc", "track")), ", ").alias("tracks"))
+        .select("week", "person", F.format_string("not on the Spotify edition: track %s", "tracks").alias("reason"))
+    )
+    return pages.unionByName(responses).unionByName(dates).unionByName(matches).unionByName(missing_tracks)

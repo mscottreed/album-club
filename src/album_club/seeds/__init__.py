@@ -32,3 +32,19 @@ def meeting_date_overrides() -> dict[int, dt.date]:
 def listen_overrides() -> list[dict]:
     """Corrections to what a page title says about an album, keyed by week and album title."""
     return read("listen_overrides.csv")
+
+
+def album_overrides() -> dict[int, dict]:
+    """week -> album name to search for, Spotify album ID, MusicBrainz release group ID and/or
+    original year, for albums the matching gets wrong."""
+    return {int(r["week"]): {k: v for k, v in r.items() if v and k != "week"} for r in read("album_overrides.csv")}
+
+
+def playlist_tracks() -> list[dict]:
+    """Each playlist listen's tracks in order (Spotify doesn't return a playlist's tracks without a user)."""
+    return read("playlist_tracks.csv")
+
+
+def albums_1001() -> list[dict]:
+    """The 1001 Albums You Must Hear Before You Die list (2021 edition)."""
+    return read("1001_albums.csv")

@@ -18,6 +18,12 @@ resources:
       name: onenote_exports
       comment: OneNote sections exported from Windows OneNote as Single File Web Page (.mht).
 
+    api_responses:
+      catalog_name: ${var.catalog}
+      schema_name: ${resources.schemas.album_club.name}
+      name: api_responses
+      comment: Raw Spotify and MusicBrainz responses as JSON lines, written by the fetch_enrichment job task.
+
   pipelines:
     album_club_pipeline:
       name: album_club
@@ -34,3 +40,41 @@ resources:
           - beautifulsoup4>=4.15.0
       configuration:
         album_club.onenote_exports_path: /Volumes/${var.catalog}/${resources.schemas.album_club.name}/${resources.volumes.onenote_exports.name}
+        album_club.api_responses_path: /Volumes/${var.catalog}/${resources.schemas.album_club.name}/${resources.volumes.api_responses.name}
+
+  secret_scopes:
+    album_club_secrets:
+      # Development mode doesn't prefix scope names, so dev sets its own name (databricks.yml).
+      # The scope is defined here; the values aren't: see docs/secrets.md.
+      name: ${var.secret_scope}
+
+  jobs:
+    album_club_refresh:
+      name: album_club_refresh
+      # Spotify and MusicBrainz lookups sit between two pipeline updates: the first builds
+      # silver_listens, the fetch writes API responses to the api_responses volume, and the
+      # second loads them into bronze and matches each listen using only those responses.
+      tasks:
+        - task_key: parse_pages
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.album_club_pipeline.id}
+        - task_key: fetch_enrichment
+          depends_on:
+            - task_key: parse_pages
+          spark_python_task:
+            python_file: ../src/fetch_enrichment.py
+            parameters:
+              - --catalog=${var.catalog}
+              - --schema=${resources.schemas.album_club.name}
+              - --responses-path=/Volumes/${var.catalog}/${resources.schemas.album_club.name}/${resources.volumes.api_responses.name}
+              - --secret-scope=${resources.secret_scopes.album_club_secrets.name}
+          environment_key: serverless
+        - task_key: match
+          depends_on:
+            - task_key: fetch_enrichment
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.album_club_pipeline.id}
+      environments:
+        - environment_key: serverless
+          spec:
+            environment_version: "6"

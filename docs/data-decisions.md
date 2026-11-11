@@ -82,8 +82,9 @@ the enrichment in post 5 implement these rules.
 - W010 (*69 Love Songs*, three volumes) has two unlabeled columns after "Favorite songs". The
   three columns are the volumes, so they're read as discs 1, 2 and 3. Nobody picked favorites
   from Volume 3.
-- **Blank favorites with a rating means no favorites.** The raw text is always kept, and rows
-  with notes the parser can't interpret (`(lyrics)`, `(bass)`, `no standouts`) are flagged.
+- **Blank favorites (or `0`) with a rating means no favorites.** The raw text is always kept,
+  and rows with notes the parser can't interpret (`(lyrics)`, `(bass)`, `no standouts`) are
+  flagged.
 
 ## People
 
@@ -123,25 +124,69 @@ the enrichment in post 5 implement these rules.
   A picker is recorded only where it's known. No stats are planned on picks.
 - Being **on the *1001 Albums* list** is separate from the selection method: almost every album
   is on it, in every era. The exceptions are mostly post-2000 albums, which the list covers
-  thinly. The list (2021 edition, 1,089 albums) is a seed in git. Matching albums to it waits for
-  enrichment (post 5): plain name matching misses many albums over spellings ("Alanis Morrisette",
-  "Red Hot Chilli Peppers"), and matching on Spotify and MusicBrainz names will be more reliable.
+  thinly. The list (2021 edition, 1,089 albums) is a seed in git. An album matches a list entry
+  when any of its names (the page's, Spotify's or MusicBrainz's) is at least 85% similar to the
+  entry in both artist and title, ignoring case, punctuation, a leading "The", "&" vs "and", and
+  edition suffixes like "(Remastered)". Several names are compared because plain page names miss
+  over spellings ("Alanis Morrisette", "Red Hot Chilli Peppers").
 - The `#N` in early titles is kept as written (`list_number_in_title`). It comes from a different
   edition of the list than the seed: `#201` *Fun House* is 200 in the seed.
 - **Spotify is the source** (post 5), because the club listens on Spotify and favorite track
   numbers refer to the edition actually played. An album is identified by the Spotify album ID
-  of that edition, found by:
-  1. a Spotify track link on the page (64 of 163 meeting pages have one), when that track's
-     album matches the page's artist and title;
-  2. otherwise a Spotify search on artist, title and year, preferring an edition whose track
-     count fits the favorites; and
-  3. an `album_overrides` file in git.
+  of that edition, chosen in this order:
+  1. an `album_overrides` file in git;
+  2. a Spotify track link on the page (64 of 163 meeting pages have one), when that track's
+     album matches the page's artist and title; and
+  3. a Spotify search on artist and title, keeping the editions where the most favorite and
+     excluded track numbers exist. Among those, the track list most like the original release's
+     (below) wins: shared titles divided by all titles across both lists, so a 60-track super
+     deluxe edition loses to the plain remaster. Then the track count nearest the original's,
+     then Spotify's order.
+
+  A Spotify, MusicBrainz or 1001 list name matches the page's at 85% similarity, as above, with
+  three more rules: a name found whole inside the other counts ("James Brown" in "James Brown &
+  The Famous Flames"; an album title needs at least two words for this); a self-titled album
+  has to be close, not just contained ("Ray Charles" isn't "The Genius of Ray Charles"); and
+  names with different Roman numerals or volume numbers never match ("Van Halen" isn't "Van
+  Halen II").
+
+  Some pages use shorthand the matching can't read (Led Zeppelin's "I", "II" and "IV", "NFR").
+  `album_overrides` gives the name to search for, and optionally the Spotify album and the
+  MusicBrainz release group. The page's name stays as written in `silver_listens`. It can also
+  give the original year, when MusicBrainz's isn't the album the club means: W099's Billie
+  Holiday is 1957, the Verve LP the club played, not 1947, the Commodore 78 album it reissued
+  with four more tracks.
+
+  An album with no match, or a track number that isn't on the chosen edition, is flagged for
+  review.
+- **Track numbers** without a disc count through the whole edition (track 15 of a two-disc album
+  is the fifteenth track). With a disc (`Disc 2: 3`), they count within that disc.
+- **MusicBrainz** finds the original release. Its release group ties every edition of an album
+  together: the search picks the group matching the page's artist and title, preferring a plain
+  album over compilations, live albums and the like. The original is the earliest official
+  release with the track count most of the group's releases share: the earliest release alone is
+  often an odd one, like Rubber Soul's 12-track Canadian LP. A year-only date sorts after full
+  dates in that year. The rule goes wrong when expanded reissues outnumber the original (most
+  *Night Visions* releases have 20 tracks), so `album_overrides` pins those editions.
+- A track on the Spotify edition is **on the original album** when its title, minus remaster and
+  mono/stereo notes, is at least 85% similar to one of that release's titles, or one title is
+  found whole inside the other, ignoring suffixes like "(feat. ...)" and "- LP Mix". So "To Zion
+  (feat. Carlos Santana)" is "To Zion" and "Steamroller Blues" is "Steamroller". Each original
+  track matches once, in edition order, so a later "Dreams - Live" on a deluxe edition is a bonus
+  track. MusicBrainz's own titles occasionally defeat this: two "[untitled]" tracks on *(What's
+  the Story) Morning Glory?*, and censored titles on *Norman Fucking Rockwell!*.
+- An album whose MusicBrainz year is more than a year off the page's is flagged.
+- **Genres** are MusicBrainz's genre tags for the release group, the five most-voted. Spotify's
+  album genres are almost always empty.
+- **"Likes the rest"** becomes a liked row for every track on the edition that the person didn't
+  rank or exclude.
 - A playlist's ratings and favorites refer to the playlist (favorite numbers are playlist
-  positions) and are excluded from album stats. W122's page lists its 16 tracks; W107's page has
-  no track list or link, so its Spotify playlist ID goes in a `listens` override file.
+  positions) and are excluded from album stats. Spotify only returns a playlist's tracks to its
+  owner, so both playlists' track lists are in a `playlist_tracks` seed: W122's copied from its
+  page, W107's ("Mellower Chains", 11 tracks) from the playlist's public Spotify embed page.
 - Other mentions of "playlist" aren't listens: W051's Spotify playlist link is part of the band
   notes, and W093 mentions the film *Nick and Norah's Infinite Playlist*.
-- MusicBrainz will probably be needed alongside Spotify (post 5): its release group ties every
-  edition of an album together, and from it the original release's track list can be found. Where
-  possible, pick the Spotify edition whose track list matches the original release. MusicBrainz
-  also has genre tags, which could matter for gold stats if Spotify's genre data is too thin.
+- API responses are kept raw: the fetch task writes them as JSON-lines files to the
+  `api_responses` volume, and the pipeline loads them into `bronze_api_responses`, one row per
+  request. Matching runs only on those responses, so re-running it never calls the APIs, and a
+  later fetch only asks for what's missing. Errors other than 404 aren't kept, so they're retried.

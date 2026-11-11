@@ -39,7 +39,7 @@ class Favorites:
     review_reasons: list[str] = field(default_factory=list)
 
 
-NO_FAVORITES = {"", "x", "none", "no standouts"}
+NO_FAVORITES = {"", "0", "x", "none", "no standouts"}
 
 TOKEN = re.compile(
     r"""
