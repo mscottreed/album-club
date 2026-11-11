@@ -278,7 +278,36 @@ All the rules are in [docs/data-decisions.md](../docs/data-decisions.md), and
 
 ## Prod
 
-TODO: fill in after the prod deploy and run.
+Fast-forwarding `v2-from-scratch` ran the checks and the deploy:
+
+```text
+Created secret_scopes.album_club_secrets
+Created volumes.api_responses
+Created secret_scopes.album_club_secrets.permissions
+Updated pipelines.album_club_pipeline
+Created jobs.album_club_refresh
+Created jobs.album_club_refresh.permissions
+Files: 49 uploaded, 0 deleted
+Resources: 5 created, 1 changed, 0 deleted, 6 unchanged
+```
+
+The pipeline changed because it has a new setting, the path to the `api_responses` volume. The
+new scope was empty, so I put the Spotify client ID and secret in it with `databricks secrets
+put-secret`, as [docs/secrets.md](../docs/secrets.md) describes, and ran the job:
+
+```bash
+databricks bundle run -t prod album_club_refresh
+```
+
+Prod started with no saved responses, so this run fetched all of them and took 35 minutes. Every
+Spotify edition matched dev's. One album didn't: prod flagged W086, Ray Charles's self-titled
+album, with "MusicBrainz says 1962, the page says 1957". MusicBrainz's search had returned
+different results than it did for dev and matched a 1962 album with the same title. Dev's match
+had no date or track list, so it was never flagged, but it was wrong too. The 1957 Atlantic LP is
+in MusicBrainz, tagged as a compilation because it collects singles, so the search passes over
+it. W086 now has an override pointing at that release group.
+
+TODO: second prod run.
 
 ## Next: gold tables and a dashboard
 

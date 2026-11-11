@@ -2,6 +2,7 @@ week,album,spotify_album_id,musicbrainz_release_group_id,year,note
 39,,0B6BbyElOe4bwziJrunOTe,a2bad96f-a572-38f2-b362-5865dedc0d35,,the 1963 King LP; the search finds a 2005 reissue first
 51,Led Zeppelin,1J8QW9qsMLx3staWaHpQmU,,,"page says ""I"""
 62,Led Zeppelin IV,5EyIDBAqhnlkAHqvPRwdbX,,,"page says ""IV"""
+86,,,084a5de6-3cc3-3b31-9108-543911528bfc,,"the 1957 Atlantic LP; MusicBrainz tags it a compilation (it collects singles), so the search skips it"
 98,Blonde,3mH6qwIy9crq0I9YQbOuDf,,,"page says ""Blond/Blonde"" (Blond on the cover, Blonde on Spotify)"
 99,,4MkdTflpaaGGcXb5vtOYRs,,1957,"MusicBrainz's 1947 is the Commodore 78 album; the club played the 1957 Verve LP, with four more tracks"
 102,Led Zeppelin II,58MQ0PLijVHePUonQlK76Y,,,"page says ""II"""
