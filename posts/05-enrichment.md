@@ -307,7 +307,13 @@ had no date or track list, so it was never flagged, but it was wrong too. The 19
 in MusicBrainz, tagged as a compilation because it collects singles, so the search passes over
 it. W086 now has an override pointing at that release group.
 
-TODO: second prod run.
+The deploy for that change created and changed no resources, since an override is just a line in
+a seed file. The second run fetched just
+the 3 responses the override needed, and prod now matches dev album for album: the same Spotify
+editions, MusicBrainz albums, track counts and 1001 entries, and an empty `silver_review`.
+
+MusicBrainz's search results can change between runs, and so can Spotify's. Once a response is
+saved, though, the matching only changes when a rule or an override does.
 
 ## Next: gold tables and a dashboard
 
