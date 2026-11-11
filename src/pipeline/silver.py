@@ -13,7 +13,7 @@ from pyspark.sql import functions as F
 import album_club
 from album_club import seeds
 from album_club.meeting_dates import assign_meeting_dates
-from album_club.meeting_page import parse_meeting_page
+from album_club.meeting_page import parse_meeting_page, parse_pasted_table
 
 TRACK = "struct<disc:int, track:int>"
 RESPONSE = (
@@ -36,6 +36,11 @@ LISTEN_OVERRIDES = seeds.listen_overrides()
 
 parse_meeting_page_udf = F.udf(
     lambda title, created, html: parse_meeting_page(title, created, html, PEOPLE, FAVORITES_OVERRIDES), MEETING_PAGE
+)
+# Spark can call a UDF on every row, even inside F.when, so weeks without a pasted table get None.
+parse_pasted_table_udf = F.udf(
+    lambda week, text: None if text is None else parse_pasted_table(week, text, PEOPLE, FAVORITES_OVERRIDES),
+    f"array<{RESPONSE}>",
 )
 
 SELECTION_METHOD = (
@@ -69,6 +74,34 @@ def meeting_pages():
             ).otherwise(F.col("review_reasons")),
         )
         .drop("artist_override")
+        .join(_pasted_tables(), "week", "left")
+        .withColumn(  # a pasted table replaces the page's own
+            "responses",
+            F.when(F.col("pasted_table").isNotNull(), parse_pasted_table_udf("week", "pasted_table")).otherwise(
+                F.col("responses")
+            ),
+        )
+        .withColumn(
+            "review_reasons",
+            F.when(
+                F.col("pasted_table").isNotNull(),
+                F.filter("review_reasons", lambda r: r != "no ratings table"),
+            ).otherwise(F.col("review_reasons")),
+        )
+        .drop("pasted_table")
+    )
+
+
+def _pasted_tables():
+    """The newest pasted ratings table for each week, from file names like ratings_tables/W153.tsv."""
+    newest = Window.partitionBy("week").orderBy(F.desc("source_file_modified_at"))
+    return (
+        spark.read.table("bronze_pasted_ratings")  # noqa: F821
+        .withColumn("week", F.regexp_extract("source_file", r"/W(\d{3})\.tsv$", 1).cast("int"))
+        .where("week IS NOT NULL")
+        .withColumn("n", F.row_number().over(newest))
+        .where("n = 1")
+        .select("week", F.col("text").alias("pasted_table"))
     )
 
 

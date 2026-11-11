@@ -12,3 +12,4 @@ scratch/**
 # Raw album club data (names, ratings) never goes in git
 data/
 .DS_Store
+.playwright-mcp

@@ -1,7 +1,14 @@
 import datetime as dt
 
 from album_club.meeting_dates import assign_meeting_dates, next_sunday
-from album_club.meeting_page import body_date, parse_meeting_page, parse_title, ratings_table, tracks_played
+from album_club.meeting_page import (
+    body_date,
+    parse_meeting_page,
+    parse_pasted_table,
+    parse_title,
+    ratings_table,
+    tracks_played,
+)
 from album_club.people import match_person
 
 PEOPLE = [
@@ -206,4 +213,13 @@ def test_unlabeled_columns_after_favorites_are_extra_discs():
         {"disc": 1, "track": 1},
         {"disc": 1, "track": 5},
         {"disc": 2, "track": 7},
+    ]
+
+
+def test_a_pasted_table_is_read_like_the_page_table():
+    pasted = "Name\tAlbum Rating\tFavorite songs\nAlex Brown\t6.7\t4, 9\nSam Cole\t\t\n"
+    responses = parse_pasted_table(153, pasted, PEOPLE, {})
+    assert [(r["person"], r["rating"], r["ranked"]) for r in responses] == [
+        ("Alex B", 6.7, [{"disc": None, "track": 4}, {"disc": None, "track": 9}]),
+        ("Sam C", None, []),
     ]

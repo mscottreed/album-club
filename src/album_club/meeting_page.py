@@ -144,6 +144,13 @@ def parse_meeting_page(
     }
 
 
+def parse_pasted_table(week: int, text: str, people: list[dict], favorites_overrides: dict) -> list[dict]:
+    """Responses from a page's ratings table copied as tab-separated text, header first. For
+    tables filled in after the export, so the page itself doesn't have them."""
+    rows = [[cell.strip() for cell in line.split("\t")] for line in text.splitlines() if line.strip()]
+    return _responses(week, rows, people, favorites_overrides)
+
+
 def _responses(week: int, table: list[list[str]], people: list[dict], overrides: dict) -> list[dict]:
     """One response per person per listen (album or playlist), including blank ones for attendance."""
     header = [h.lower() for h in table[0]]

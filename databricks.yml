@@ -14,6 +14,10 @@ variables:
   secret_scope:
     description: Secret scope for API credentials
     default: album_club
+  warehouse_id:
+    description: SQL warehouse the dashboard runs on (Free Edition has one)
+    lookup:
+      warehouse: Serverless Starter Warehouse
   ci_service_principal:
     description: Application ID of the album-club-ci service principal that GitHub Actions deploys prod as
     default: fc6dd84e-5cda-40d2-81db-865f13b5b731

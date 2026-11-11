@@ -1,0 +1,9 @@
+resources:
+  dashboards:
+    album_club_dashboard:
+      display_name: Album club
+      file_path: ../src/dashboards/album_club.lvdash.json
+      warehouse_id: ${var.warehouse_id}
+      # The dashboard's queries name tables without a schema; each target points them at its own.
+      dataset_catalog: ${var.catalog}
+      dataset_schema: ${resources.schemas.album_club.name}

@@ -44,9 +44,10 @@ OneNote pages used to run a weekly album club, and documenting each step as it's
 
 ## Housekeeping (not blog posts)
 
-- Once the new pipeline is running, remove the earlier exploratory objects from the
+- ~~Once the new pipeline is running, remove the earlier exploratory objects from the
   workspace (the `Album Review Pipeline`, the `Get Songs From Album` job, the
-  `workspace.music` schema and its volumes, the `album-club` Git folder).
+  `workspace.music` schema and its volumes, the `album-club` Git folder, the `Spotify`
+  secret scope).~~ Done 2026-11-11.
 
 ## Open questions
 

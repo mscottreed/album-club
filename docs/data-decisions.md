@@ -12,6 +12,10 @@ the enrichment in post 5 implement these rules.
   app (post 7), so the export is imported once rather than on a schedule.
 - The raw export holds full names and lives only in the private Unity Catalog volume and a
   gitignored local `data/` folder, never in git.
+- A ratings table filled in on a page after the export can be copied from OneNote as
+  tab-separated text into `ratings_tables/W###.tsv` in the same volume (W153 and W156). The
+  pasted table replaces that week's table from the page and goes through the same rules. It's
+  for meetings from before this project started; later ones go in the app (post 7).
 
 ## Pages
 
@@ -190,3 +194,21 @@ the enrichment in post 5 implement these rules.
   `api_responses` volume, and the pipeline loads them into `bronze_api_responses`, one row per
   request. Matching runs only on those responses, so re-running it never calls the APIs, and a
   later fetch only asks for what's missing. Errors other than 404 aren't kept, so they're retried.
+
+## Gold and the dashboard
+
+- Gold is a star schema of SQL materialized views (`src/pipeline/gold.sql`), albums only:
+  `dim_person`, `dim_album`, `dim_track`, `fact_ratings` (person × album) and
+  `fact_track_picks` (person × track). Playlist ratings and favorites stay in silver.
+- `dim_album` shows names as the club wrote them (`artist`, `album`, `label`), with
+  MusicBrainz's names alongside. `dim_track` titles drop Spotify's remaster and mono/stereo
+  notes ("Dreams - 2004 Remaster" is "Dreams"); `spotify_title` keeps them.
+- Aggregates are precomputed so the dashboard's queries only select: album averages
+  (`agg_album_ratings`, guests included), rankings, overall and per-decade averages, and each
+  member's unrated albums. Rankings and averages have a row for each person and one for
+  `Club`, everyone together. The club's overall average is over all ratings, so albums more
+  people rated count more.
+- A rank is by rating, highest first, and tied ratings share a rank, so a top 10 includes every
+  album tied at the cutoff.
+- The dashboard picks a person with a parameter rather than a filter, so there's no "All"
+  mixing everyone's rows; `Club` is the everyone view. The Album page starts with no album.

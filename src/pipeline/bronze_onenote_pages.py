@@ -33,3 +33,23 @@ def bronze_onenote_pages():
         )
         .select("source_file", "source_file_modified_at", "page.*", F.current_timestamp().alias("ingested_at"))
     )
+
+
+@dp.table(comment="Ratings tables copied from meeting pages as tab-separated text (ratings_tables/W###.tsv), as-is.")
+def bronze_pasted_ratings():
+    # Tables filled in on the page after the export. The files live next to the exports, since
+    # they hold the same names and ratings, and never go in git.
+    exports_path = spark.conf.get("album_club.onenote_exports_path")  # noqa: F821
+    return (
+        spark.readStream.format("cloudFiles")  # noqa: F821
+        .option("cloudFiles.format", "text")
+        .option("wholetext", "true")
+        .option("pathGlobFilter", "*.tsv")
+        .load(exports_path)
+        .select(
+            F.col("_metadata.file_path").alias("source_file"),
+            F.col("_metadata.file_modification_time").alias("source_file_modified_at"),
+            F.col("value").alias("text"),
+            F.current_timestamp().alias("ingested_at"),
+        )
+    )

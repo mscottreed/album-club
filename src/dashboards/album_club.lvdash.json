@@ -1,0 +1,1393 @@
+{
+  "datasets": [
+    {
+      "name": "people",
+      "displayName": "People",
+      "queryLines": [
+        "SELECT person FROM (\n",
+        "  SELECT 'Club' AS person, 0 AS sort\n",
+        "  UNION ALL\n",
+        "  SELECT person, 1 FROM dim_person WHERE role = 'member'\n",
+        ")\n",
+        "ORDER BY sort, person\n"
+      ]
+    },
+    {
+      "name": "my_stats",
+      "displayName": "My stats",
+      "queryLines": [
+        "SELECT average_rating, albums_rated\n",
+        "FROM agg_person_ratings\n",
+        "WHERE person = :person\n"
+      ],
+      "parameters": [
+        {
+          "displayName": "person",
+          "keyword": "person",
+          "dataType": "STRING",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "Scott R"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "my_decades",
+      "displayName": "My decades",
+      "queryLines": [
+        "SELECT concat(decade, 's') AS decade, average_rating, albums_rated\n",
+        "FROM agg_person_decades\n",
+        "WHERE person = :person\n",
+        "ORDER BY decade\n"
+      ],
+      "parameters": [
+        {
+          "displayName": "person",
+          "keyword": "person",
+          "dataType": "STRING",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "Scott R"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "my_ratings",
+      "displayName": "My ratings",
+      "queryLines": [
+        "SELECT r.rank, r.rating, a.label, a.artist, a.album, a.year, a.meeting_date, c.average_rating AS club_average\n",
+        "FROM agg_album_rankings r\n",
+        "JOIN dim_album a USING (listen_id)\n",
+        "JOIN agg_album_ratings c USING (listen_id)\n",
+        "WHERE r.person = :person\n",
+        "ORDER BY r.rank, c.average_rating DESC\n"
+      ],
+      "parameters": [
+        {
+          "displayName": "person",
+          "keyword": "person",
+          "dataType": "STRING",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "Scott R"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "my_top_10",
+      "displayName": "Top 10",
+      "queryLines": [
+        "SELECT r.rank, r.rating, a.label\n",
+        "FROM agg_album_rankings r\n",
+        "JOIN dim_album a USING (listen_id)\n",
+        "WHERE r.person = :person AND r.rank <= 10\n"
+      ],
+      "parameters": [
+        {
+          "displayName": "person",
+          "keyword": "person",
+          "dataType": "STRING",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "Scott R"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "my_unrated",
+      "displayName": "Not rated yet",
+      "queryLines": [
+        "SELECT a.label, a.artist, a.album, a.year, a.meeting_date, c.average_rating AS club_average\n",
+        "FROM agg_unrated_albums u\n",
+        "JOIN dim_album a USING (listen_id)\n",
+        "LEFT JOIN agg_album_ratings c USING (listen_id)\n",
+        "WHERE u.person = :person\n",
+        "ORDER BY a.meeting_date DESC\n"
+      ],
+      "parameters": [
+        {
+          "displayName": "person",
+          "keyword": "person",
+          "dataType": "STRING",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "Scott R"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "albums",
+      "displayName": "Albums",
+      "queryLines": [
+        "SELECT label FROM dim_album ORDER BY label\n"
+      ]
+    },
+    {
+      "name": "album",
+      "displayName": "Album",
+      "queryLines": [
+        "SELECT r.rating, c.average_rating AS club_average, c.raters\n",
+        "FROM dim_album a\n",
+        "LEFT JOIN agg_album_rankings r ON r.listen_id = a.listen_id AND r.person = :person\n",
+        "LEFT JOIN agg_album_ratings c ON c.listen_id = a.listen_id\n",
+        "WHERE a.label = :album\n"
+      ],
+      "parameters": [
+        {
+          "displayName": "person",
+          "keyword": "person",
+          "dataType": "STRING",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "Scott R"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "album",
+          "keyword": "album",
+          "dataType": "STRING",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": ""
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "album_tracks",
+      "displayName": "Album tracks",
+      "queryLines": [
+        "SELECT t.position, t.title, coalesce(CAST(k.rank AS STRING), '') AS rank,\n",
+        "  CASE WHEN k.liked THEN 'liked' ELSE 'not liked' END AS opinion\n",
+        "FROM fact_track_picks k\n",
+        "JOIN dim_track t USING (listen_id, position)\n",
+        "JOIN dim_album a USING (listen_id)\n",
+        "WHERE k.person = :person AND a.label = :album\n",
+        "ORDER BY k.rank NULLS LAST, t.position\n"
+      ],
+      "parameters": [
+        {
+          "displayName": "person",
+          "keyword": "person",
+          "dataType": "STRING",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "Scott R"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "album",
+          "keyword": "album",
+          "dataType": "STRING",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": ""
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "my_albums",
+      "displayName": "My albums",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layout": [
+        {
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 2,
+            "height": 2
+          },
+          "widget": {
+            "name": "average_rating",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "my_stats",
+                  "disaggregated": false,
+                  "fields": [
+                    {
+                      "name": "average_rating",
+                      "expression": "SUM(`average_rating`)"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "average_rating",
+                  "displayName": "Average rating",
+                  "format": {
+                    "type": "number-plain",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 2
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Average rating"
+              }
+            }
+          }
+        },
+        {
+          "position": {
+            "x": 2,
+            "y": 0,
+            "width": 2,
+            "height": 2
+          },
+          "widget": {
+            "name": "albums_rated",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "my_stats",
+                  "disaggregated": false,
+                  "fields": [
+                    {
+                      "name": "albums_rated",
+                      "expression": "SUM(`albums_rated`)"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "albums_rated",
+                  "displayName": "Albums rated"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Albums rated"
+              }
+            }
+          }
+        },
+        {
+          "position": {
+            "x": 4,
+            "y": 0,
+            "width": 2,
+            "height": 2
+          },
+          "widget": {
+            "name": "albums_unrated",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "my_unrated",
+                  "disaggregated": false,
+                  "fields": [
+                    {
+                      "name": "count(*)",
+                      "expression": "COUNT(`*`)"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "count(*)",
+                  "displayName": "Not rated yet"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Not rated yet"
+              }
+            }
+          }
+        },
+        {
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 3,
+            "height": 6
+          },
+          "widget": {
+            "name": "top_10",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "my_top_10",
+                  "disaggregated": true,
+                  "fields": [
+                    {
+                      "name": "label",
+                      "expression": "`label`"
+                    },
+                    {
+                      "name": "rating",
+                      "expression": "`rating`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "rating",
+                  "displayName": "Rating",
+                  "scale": {
+                    "type": "quantitative",
+                    "domain": {
+                      "min": 0,
+                      "max": 10
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "label",
+                  "displayName": "Album",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "x-reversed"
+                    }
+                  }
+                },
+                "label": {
+                  "show": true
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Top 10",
+                "showDescription": true,
+                "description": "Ties at the cutoff are all included."
+              }
+            }
+          }
+        },
+        {
+          "position": {
+            "x": 3,
+            "y": 2,
+            "width": 3,
+            "height": 6
+          },
+          "widget": {
+            "name": "by_decade",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "my_decades",
+                  "disaggregated": true,
+                  "fields": [
+                    {
+                      "name": "decade",
+                      "expression": "`decade`"
+                    },
+                    {
+                      "name": "average_rating",
+                      "expression": "`average_rating`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "decade",
+                  "displayName": "Decade",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "natural-order"
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "average_rating",
+                  "displayName": "Average rating",
+                  "scale": {
+                    "type": "quantitative",
+                    "domain": {
+                      "min": 0,
+                      "max": 10
+                    }
+                  }
+                },
+                "label": {
+                  "show": true
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Average by decade"
+              }
+            }
+          }
+        },
+        {
+          "position": {
+            "x": 0,
+            "y": 8,
+            "width": 3,
+            "height": 10
+          },
+          "widget": {
+            "name": "ranked_list",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "my_ratings",
+                  "disaggregated": true,
+                  "fields": [
+                    {
+                      "name": "rank",
+                      "expression": "`rank`"
+                    },
+                    {
+                      "name": "artist",
+                      "expression": "`artist`"
+                    },
+                    {
+                      "name": "album",
+                      "expression": "`album`"
+                    },
+                    {
+                      "name": "rating",
+                      "expression": "`rating`"
+                    },
+                    {
+                      "name": "club_average",
+                      "expression": "`club_average`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "allowHTMLByDefault": false,
+              "condensed": true,
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "rank",
+                    "displayName": "rank",
+                    "title": "Rank",
+                    "type": "integer",
+                    "displayAs": "number",
+                    "visible": true,
+                    "order": 0,
+                    "alignContent": "right",
+                    "allowHTML": false,
+                    "allowSearch": false,
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "highlightLinks": false,
+                    "imageHeight": "",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "linkOpenInNewTab": true,
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "preserveWhitespace": false,
+                    "useMonospaceFont": false,
+                    "numberFormat": "0"
+                  },
+                  {
+                    "fieldName": "artist",
+                    "displayName": "artist",
+                    "title": "Artist",
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 1,
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "allowSearch": false,
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "highlightLinks": false,
+                    "imageHeight": "",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "linkOpenInNewTab": true,
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "preserveWhitespace": false,
+                    "useMonospaceFont": false
+                  },
+                  {
+                    "fieldName": "album",
+                    "displayName": "album",
+                    "title": "Album",
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 2,
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "allowSearch": false,
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "highlightLinks": false,
+                    "imageHeight": "",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "linkOpenInNewTab": true,
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "preserveWhitespace": false,
+                    "useMonospaceFont": false
+                  },
+                  {
+                    "fieldName": "rating",
+                    "displayName": "rating",
+                    "title": "Rating",
+                    "type": "float",
+                    "displayAs": "number",
+                    "visible": true,
+                    "order": 3,
+                    "alignContent": "right",
+                    "allowHTML": false,
+                    "allowSearch": false,
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "highlightLinks": false,
+                    "imageHeight": "",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "linkOpenInNewTab": true,
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "preserveWhitespace": false,
+                    "useMonospaceFont": false,
+                    "numberFormat": "0.00"
+                  },
+                  {
+                    "fieldName": "club_average",
+                    "displayName": "club_average",
+                    "title": "Club average",
+                    "type": "float",
+                    "displayAs": "number",
+                    "visible": true,
+                    "order": 4,
+                    "alignContent": "right",
+                    "allowHTML": false,
+                    "allowSearch": false,
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "highlightLinks": false,
+                    "imageHeight": "",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "linkOpenInNewTab": true,
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "preserveWhitespace": false,
+                    "useMonospaceFont": false,
+                    "numberFormat": "0.00"
+                  }
+                ]
+              },
+              "invisibleColumns": [],
+              "itemsPerPage": 25,
+              "paginationSize": "default",
+              "withRowNumber": false,
+              "frame": {
+                "showTitle": true,
+                "title": "Ranked albums"
+              }
+            }
+          }
+        },
+        {
+          "position": {
+            "x": 3,
+            "y": 8,
+            "width": 3,
+            "height": 10
+          },
+          "widget": {
+            "name": "unrated_list",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "my_unrated",
+                  "disaggregated": true,
+                  "fields": [
+                    {
+                      "name": "artist",
+                      "expression": "`artist`"
+                    },
+                    {
+                      "name": "album",
+                      "expression": "`album`"
+                    },
+                    {
+                      "name": "meeting_date",
+                      "expression": "`meeting_date`"
+                    },
+                    {
+                      "name": "club_average",
+                      "expression": "`club_average`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "allowHTMLByDefault": false,
+              "condensed": true,
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "artist",
+                    "displayName": "artist",
+                    "title": "Artist",
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 0,
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "allowSearch": false,
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "highlightLinks": false,
+                    "imageHeight": "",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "linkOpenInNewTab": true,
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "preserveWhitespace": false,
+                    "useMonospaceFont": false
+                  },
+                  {
+                    "fieldName": "album",
+                    "displayName": "album",
+                    "title": "Album",
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 1,
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "allowSearch": false,
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "highlightLinks": false,
+                    "imageHeight": "",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "linkOpenInNewTab": true,
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "preserveWhitespace": false,
+                    "useMonospaceFont": false
+                  },
+                  {
+                    "fieldName": "meeting_date",
+                    "displayName": "meeting_date",
+                    "title": "Played",
+                    "type": "date",
+                    "displayAs": "datetime",
+                    "visible": true,
+                    "order": 2,
+                    "alignContent": "right",
+                    "allowHTML": false,
+                    "allowSearch": false,
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "highlightLinks": false,
+                    "imageHeight": "",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "linkOpenInNewTab": true,
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "preserveWhitespace": false,
+                    "useMonospaceFont": false,
+                    "dateTimeFormat": "YYYY-MM-DD"
+                  },
+                  {
+                    "fieldName": "club_average",
+                    "displayName": "club_average",
+                    "title": "Club average",
+                    "type": "float",
+                    "displayAs": "number",
+                    "visible": true,
+                    "order": 3,
+                    "alignContent": "right",
+                    "allowHTML": false,
+                    "allowSearch": false,
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "highlightLinks": false,
+                    "imageHeight": "",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "linkOpenInNewTab": true,
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "preserveWhitespace": false,
+                    "useMonospaceFont": false,
+                    "numberFormat": "0.00"
+                  }
+                ]
+              },
+              "invisibleColumns": [],
+              "itemsPerPage": 25,
+              "paginationSize": "default",
+              "withRowNumber": false,
+              "frame": {
+                "showTitle": true,
+                "title": "Not rated yet"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "album_page",
+      "displayName": "Album",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layout": [
+        {
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 2,
+            "height": 2
+          },
+          "widget": {
+            "name": "album_filter",
+            "queries": [
+              {
+                "name": "albums_label",
+                "query": {
+                  "datasetName": "albums",
+                  "disaggregated": false,
+                  "fields": [
+                    {
+                      "name": "label",
+                      "expression": "`label`"
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "album_album_param",
+                "query": {
+                  "datasetName": "album",
+                  "disaggregated": false,
+                  "parameters": [
+                    {
+                      "name": "album",
+                      "keyword": "album"
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "album_tracks_album_param",
+                "query": {
+                  "datasetName": "album_tracks",
+                  "disaggregated": false,
+                  "parameters": [
+                    {
+                      "name": "album",
+                      "keyword": "album"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-single-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "label",
+                    "displayName": "Album",
+                    "queryName": "albums_label"
+                  },
+                  {
+                    "parameterName": "album",
+                    "queryName": "album_album_param"
+                  },
+                  {
+                    "parameterName": "album",
+                    "queryName": "album_tracks_album_param"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Album"
+              }
+            }
+          }
+        },
+        {
+          "position": {
+            "x": 2,
+            "y": 0,
+            "width": 2,
+            "height": 2
+          },
+          "widget": {
+            "name": "my_rating",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "album",
+                  "disaggregated": false,
+                  "fields": [
+                    {
+                      "name": "avg(rating)",
+                      "expression": "AVG(`rating`)"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "avg(rating)",
+                  "displayName": "Rating",
+                  "format": {
+                    "type": "number-plain",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 2
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Rating"
+              }
+            }
+          }
+        },
+        {
+          "position": {
+            "x": 4,
+            "y": 0,
+            "width": 2,
+            "height": 2
+          },
+          "widget": {
+            "name": "club_average",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "album",
+                  "disaggregated": false,
+                  "fields": [
+                    {
+                      "name": "avg(club_average)",
+                      "expression": "AVG(`club_average`)"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "avg(club_average)",
+                  "displayName": "Club average",
+                  "format": {
+                    "type": "number-plain",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 2
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Club average"
+              }
+            }
+          }
+        },
+        {
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 6,
+            "height": 8
+          },
+          "widget": {
+            "name": "favorite_tracks",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "album_tracks",
+                  "disaggregated": true,
+                  "fields": [
+                    {
+                      "name": "rank",
+                      "expression": "`rank`"
+                    },
+                    {
+                      "name": "position",
+                      "expression": "`position`"
+                    },
+                    {
+                      "name": "title",
+                      "expression": "`title`"
+                    },
+                    {
+                      "name": "opinion",
+                      "expression": "`opinion`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "allowHTMLByDefault": false,
+              "condensed": true,
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "rank",
+                    "displayName": "rank",
+                    "title": "Rank",
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 0,
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "allowSearch": false,
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "highlightLinks": false,
+                    "imageHeight": "",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "linkOpenInNewTab": true,
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "preserveWhitespace": false,
+                    "useMonospaceFont": false
+                  },
+                  {
+                    "fieldName": "position",
+                    "displayName": "position",
+                    "title": "Track",
+                    "type": "integer",
+                    "displayAs": "number",
+                    "visible": true,
+                    "order": 1,
+                    "alignContent": "right",
+                    "allowHTML": false,
+                    "allowSearch": false,
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "highlightLinks": false,
+                    "imageHeight": "",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "linkOpenInNewTab": true,
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "preserveWhitespace": false,
+                    "useMonospaceFont": false,
+                    "numberFormat": "0"
+                  },
+                  {
+                    "fieldName": "title",
+                    "displayName": "title",
+                    "title": "Title",
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 2,
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "allowSearch": false,
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "highlightLinks": false,
+                    "imageHeight": "",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "linkOpenInNewTab": true,
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "preserveWhitespace": false,
+                    "useMonospaceFont": false
+                  },
+                  {
+                    "fieldName": "opinion",
+                    "displayName": "opinion",
+                    "title": "",
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 3,
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "allowSearch": false,
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "highlightLinks": false,
+                    "imageHeight": "",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "linkOpenInNewTab": true,
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "preserveWhitespace": false,
+                    "useMonospaceFont": false
+                  }
+                ]
+              },
+              "invisibleColumns": [],
+              "itemsPerPage": 50,
+              "paginationSize": "default",
+              "withRowNumber": false,
+              "frame": {
+                "showTitle": true,
+                "title": "Favorite tracks",
+                "showDescription": true,
+                "description": "Ranked favorites first, then tracks liked or not liked as a group (\"liked the rest\"). Empty for the club."
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "filters",
+      "displayName": "Filters",
+      "pageType": "PAGE_TYPE_GLOBAL_FILTERS",
+      "layout": [
+        {
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 1,
+            "height": 1
+          },
+          "widget": {
+            "name": "person_filter",
+            "queries": [
+              {
+                "name": "people_person",
+                "query": {
+                  "datasetName": "people",
+                  "disaggregated": false,
+                  "fields": [
+                    {
+                      "name": "person",
+                      "expression": "`person`"
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "my_stats_person_param",
+                "query": {
+                  "datasetName": "my_stats",
+                  "disaggregated": false,
+                  "parameters": [
+                    {
+                      "name": "person",
+                      "keyword": "person"
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "my_decades_person_param",
+                "query": {
+                  "datasetName": "my_decades",
+                  "disaggregated": false,
+                  "parameters": [
+                    {
+                      "name": "person",
+                      "keyword": "person"
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "my_ratings_person_param",
+                "query": {
+                  "datasetName": "my_ratings",
+                  "disaggregated": false,
+                  "parameters": [
+                    {
+                      "name": "person",
+                      "keyword": "person"
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "my_top_10_person_param",
+                "query": {
+                  "datasetName": "my_top_10",
+                  "disaggregated": false,
+                  "parameters": [
+                    {
+                      "name": "person",
+                      "keyword": "person"
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "my_unrated_person_param",
+                "query": {
+                  "datasetName": "my_unrated",
+                  "disaggregated": false,
+                  "parameters": [
+                    {
+                      "name": "person",
+                      "keyword": "person"
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "album_person_param",
+                "query": {
+                  "datasetName": "album",
+                  "disaggregated": false,
+                  "parameters": [
+                    {
+                      "name": "person",
+                      "keyword": "person"
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "album_tracks_person_param",
+                "query": {
+                  "datasetName": "album_tracks",
+                  "disaggregated": false,
+                  "parameters": [
+                    {
+                      "name": "person",
+                      "keyword": "person"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-single-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "person",
+                    "displayName": "Person",
+                    "queryName": "people_person"
+                  },
+                  {
+                    "parameterName": "person",
+                    "queryName": "my_stats_person_param"
+                  },
+                  {
+                    "parameterName": "person",
+                    "queryName": "my_decades_person_param"
+                  },
+                  {
+                    "parameterName": "person",
+                    "queryName": "my_ratings_person_param"
+                  },
+                  {
+                    "parameterName": "person",
+                    "queryName": "my_top_10_person_param"
+                  },
+                  {
+                    "parameterName": "person",
+                    "queryName": "my_unrated_person_param"
+                  },
+                  {
+                    "parameterName": "person",
+                    "queryName": "album_person_param"
+                  },
+                  {
+                    "parameterName": "person",
+                    "queryName": "album_tracks_person_param"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Person"
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

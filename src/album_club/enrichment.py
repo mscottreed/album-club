@@ -157,13 +157,16 @@ NOT_ORIGINAL_ALBUMS = {"Compilation", "Live", "Remix", "Demo", "DJ-mix", "Mixtap
 
 def pick_release_group(search: dict | None, artist: str | None, album: str) -> str | None:
     """The search result that matches the page, preferring an album that isn't a compilation, live
-    album or the like (soundtracks are fine), then the closest title, then the earliest (so
-    reissues lose)."""
+    album or the like (soundtracks are fine), then the closest title, suffixes included (so
+    "69 Love Songs" beats "69 Love Songs (sampler)"), then the earliest (so reissues lose)."""
     matches = [g for g in (search or {}).get("release-groups", []) if _matches(g, artist, album)]
     plain = [g for g in matches if _is_original_album(g)]
-    ranked = sorted(
-        plain or matches, key=lambda g: (-similar(album, g["title"]), g.get("first-release-date") or "9999")
-    )
+
+    def closeness(group):
+        whole = difflib.SequenceMatcher(None, normalize(album), normalize(group["title"])).ratio()
+        return -similar(album, group["title"]), -whole, group.get("first-release-date") or "9999"
+
+    ranked = sorted(plain or matches, key=closeness)
     return ranked[0]["id"] if ranked else None
 
 

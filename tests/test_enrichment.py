@@ -133,6 +133,29 @@ def test_pick_release_group_prefers_the_earliest_of_equal_matches():
     assert pick_release_group(search, "Some Band", "Some Album") == "original"
 
 
+def test_pick_release_group_prefers_the_exact_title_to_an_earlier_suffixed_one():
+    credit = [{"name": "Some Band"}]
+    search = {
+        "release-groups": [
+            {
+                "id": "sampler",
+                "title": "Some Album (sampler)",
+                "primary-type": "Album",
+                "first-release-date": "1999-06",
+                "artist-credit": credit,
+            },
+            {
+                "id": "album",
+                "title": "Some Album",
+                "primary-type": "Album",
+                "first-release-date": "1999-09-07",
+                "artist-credit": credit,
+            },
+        ]
+    }
+    assert pick_release_group(search, "Some Band", "Some Album") == "album"
+
+
 def test_pick_original_release_is_the_earliest():
     releases = [{"id": "reissue", "date": "2004-03-01"}, {"id": "undated"}, {"id": "first", "date": "1977-02-04"}]
     assert pick_original_release(releases) == "first"
