@@ -18,6 +18,9 @@ variables:
     description: SQL warehouse the dashboard runs on (Free Edition has one)
     lookup:
       warehouse: Serverless Starter Warehouse
+  admin_user:
+    description: Who can upload exports and query the tables directly (the schema holds the raw export)
+    default: scott@craftingbytes.com
   ci_service_principal:
     description: Application ID of the album-club-ci service principal that GitHub Actions deploys prod as
     default: fc6dd84e-5cda-40d2-81db-865f13b5b731
@@ -52,3 +55,12 @@ targets:
         level: CAN_MANAGE
       - group_name: admins
         level: CAN_MANAGE
+    resources:
+      dashboards:
+        album_club_dashboard:
+          # Members see the data through the publisher's (the service principal's) permissions,
+          # so they need no grants on the schema. Everyone in the workspace is in the club.
+          embed_credentials: true
+          permissions:
+            - group_name: users
+              level: CAN_RUN

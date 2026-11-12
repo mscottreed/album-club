@@ -4,11 +4,13 @@ resources:
       catalog_name: ${var.catalog}
       name: album_club
       comment: Album club data, from raw OneNote exports to gold tables.
-      # In prod the CI service principal owns the schema, so people need a grant to upload
-      # exports and query tables. Grants on a schema apply to its volumes and tables too.
-      # On Free Edition, 'account users' is just me and the CI service principal.
+      # In prod the CI service principal owns the schema, so I need a grant to upload exports and
+      # query tables. Grants on a schema apply to its volumes and tables too. The schema holds the
+      # raw export, with full names, so the grant goes to me, not to club members. The bundle
+      # adds these grants but doesn't revoke ones it no longer lists: when this grant moved off
+      # 'account users', that one had to be revoked by hand.
       grants:
-        - principal: account users
+        - principal: ${var.admin_user}
           privileges: [USE_SCHEMA, SELECT, READ_VOLUME, WRITE_VOLUME]
 
   volumes:

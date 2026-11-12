@@ -240,7 +240,26 @@ My average the highest at a 7.06, and the Bill L's is the lowest at 5.5.
 
 ## Prod
 
-<!-- Filled in after the prod deploy. -->
+Fast-forwarding `v2-from-scratch` ran the checks and the deploy:
+
+```text
+Created dashboards.album_club_dashboard
+Created dashboards.album_club_dashboard.permissions
+Files: 53 uploaded, 0 deleted
+Resources: 2 created, 0 changed, 0 deleted, 12 unchanged
+```
+
+The pipeline counts as unchanged even though it has a new SQL file and a new bronze table. Its
+settings didn't change, and it picks up whatever is in `src/pipeline`. Before running the job I
+copied the two pasted ratings tables into prod's `onenote_exports` volume. Then:
+
+```bash
+databricks bundle run -t prod album_club_refresh
+```
+
+It took about 11 minutes and only fetched 3 new responses, the MusicBrainz lookups for the real
+*69 Love Songs*. Every gold table in prod has the same number of rows as in dev, the averages
+match, and `silver_review` is still empty.
 
 ## Next: an app for entering this week's ratings
 
