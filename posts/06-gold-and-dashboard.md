@@ -232,11 +232,11 @@ Here's where the numbers landed in dev. The gold tables:
 
 The club averages 6.39 across 162 albums. *Hotel California* tops our list at 8.34, just ahead of
 *Rumours* at 8.31. At the other end, seven of us gave Napalm
-Death's *Scum* an average of 1.07, with Devo's *Q: Are We Not Men? A: We Are Devo!* a (1.79). The decades barely differ: the club's averages
+Death's *Scum* an average of 1.07, with Devo's *Q: Are We Not Men? A: We Are Devo!* at 1.79. The decades barely differ: the club's averages
 run from 5.98 for the 2020s to 6.51 for the 2010s.
 
-Each member's numbers come from `agg_person_ratings`, with the count from `agg_unrated_albums`,
-with my average the highest at a 7.06, and the lowest is Bill L at 5.5.
+Each member's numbers come from `agg_person_ratings`, with the count from `agg_unrated_albums`.
+My average the highest at a 7.06, and the Bill L's is the lowest at 5.5.
 
 ## Prod
 
