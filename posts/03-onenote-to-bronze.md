@@ -46,6 +46,28 @@ data itself goes in the other direction. The export lives in two places only: a 
 data/
 ```
 
+## Bronze, silver and gold
+
+Databricks recommends a layout it calls the medallion architecture, and this series follows it.
+Data moves through three layers of tables, and each layer is built from the one before:
+
+- Bronze is the data as it arrived, with nothing fixed or interpreted.
+- Silver is cleaned up and typed, with one row per meeting, per rating and per favorite song, and
+  the rules about what the pages mean applied.
+- Gold is shaped for whatever uses it, which for the club is a dashboard.
+
+Databricks doesn't enforce any of this. The layers are just tables, and here they all live in one
+schema, with `bronze_` and `silver_` in the names of the first two. Some projects give each layer
+its own schema, but one schema is plenty for an album club.
+
+The rule for bronze is to keep it raw. This post's bronze table holds each page's HTML exactly as
+OneNote wrote it. Even the created date stays as the text on the page, because turning it into a
+date is a decision, and decisions belong in silver.
+
+That's what lets everything after bronze change. If I decide a favorites cell means something
+different, the fix is new code and another pipeline run over bronze, not another export from
+Windows OneNote. The export only has to happen once because bronze keeps all of it.
+
 ## Planning before building
 
 Before writing the pipeline, I profiled the export to see what parsing it would take. There are
@@ -169,8 +191,8 @@ def _text(element) -> str:
     return " ".join(element.get_text(" ").split())
 ```
 
-`created` stays as the text OneNote wrote, like `Sunday, November 21, 2021 11:08 AM`. Turning it
-into a timestamp is parsing, and parsing belongs in silver.
+`created` stays as the text OneNote wrote, like `Sunday, November 21, 2021 11:08 AM`. Silver
+turns it into a timestamp.
 
 BeautifulSoup is now a dependency in two places. It's in `pyproject.toml` so the code and tests
 run locally, and in the pipeline's `environment` so serverless installs it too. The comment the
@@ -215,6 +237,10 @@ there because the pipeline provides `spark` as a global, which ruff can't see.
 remembering in a checkpoint which files it has already processed. The `binaryFile` format hands
 each `.mht` over as one row with the whole file in `content`. The UDF splits it into pages, and
 `explode` turns that one row into one row per page.
+
+Because the function returns a stream, `bronze_onenote_pages` is a streaming table. Each
+pipeline update adds rows for the files Auto Loader hasn't seen and leaves the rows already
+there alone, which is what you want from a layer that holds things as they arrived.
 
 The volume path comes from the pipeline's `configuration` in the bundle, so the same code reads
 from the dev volume in dev and the prod volume in prod.

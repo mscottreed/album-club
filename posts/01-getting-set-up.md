@@ -38,6 +38,24 @@ None of this matters in a notebook page. It matters a lot when you want to count
 albums we've rated, or match our notes to a track listing. Post 4 deals with the name problems and
 post 5 with editions, but this is the reason the series doesn't start by writing SQL.
 
+## What Databricks is
+
+If you haven't used it, Databricks is a data platform built around Apache Spark, started by the
+people who created Spark. Databricks calls the result a lakehouse: data is stored as files, as in a
+data lake, but you query it as tables, as in a data warehouse. Three pieces come up in every post:
+
+- Spark runs the work. It splits a job across several machines, and you write it in Python or
+  SQL.
+- Delta Lake is the table format. A Delta table is a folder of Parquet files plus a
+  transaction log, so a write either finishes completely or doesn't happen at all, and you can
+  look at a table as it was before the last change.
+- Unity Catalog organizes and secures everything. Tables live in schemas, and schemas live in
+  catalogs, so every table has a three-part name like `workspace.album_club.silver_ratings`.
+  Files get the same treatment in volumes. Who can see what is a set of grants on those objects.
+
+You reach all of it through a workspace, the website you log in to, which also holds notebooks,
+jobs and dashboards.
+
 ## Databricks Free Edition
 
 [Databricks Free Edition](https://docs.databricks.com/aws/en/getting-started/free-edition) is a

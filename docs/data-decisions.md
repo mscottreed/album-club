@@ -13,9 +13,16 @@ the enrichment in post 5 implement these rules.
 - The raw export holds full names and lives only in the private Unity Catalog volume and a
   gitignored local `data/` folder, never in git.
 - A ratings table filled in on a page after the export can be copied from OneNote as
-  tab-separated text into `ratings_tables/W###.tsv` in the same volume (W153 and W156). The
-  pasted table replaces that week's table from the page and goes through the same rules. It's
+  tab-separated text into `ratings_tables/W###.tsv` in the same volume (W153 and W156). It's
   for meetings from before this project started; later ones go in the app (post 7).
+- The ratings app saves the same kind of file, `ratings_tables/W###-<timestamp>.tsv`, and goes
+  through the same rules. For each week, person (or name as written, for someone not in the
+  people seed) and listen, the row from the newest file wins over older files and the page.
+  Files are never overwritten, so every save is kept.
+- A meeting with no OneNote page is entered in the app as `meetings/W###-<timestamp>.json`:
+  week, date, artist, album, year and the Spotify album ID. The newest file per week is used,
+  and only for weeks with no page. One ratings file applies to every page of its week, so the
+  app is for one-album weeks.
 
 ## Pages
 
@@ -45,6 +52,8 @@ the enrichment in post 5 implement these rules.
      (meetings were almost always on Sundays), working in week-number order and counting from
      the last known date so one early-created page can't push later weeks off; and
   3. a `meeting_dates` override file in git for corrections.
+
+  A meeting entered in the app uses the date entered (`app`), unless an override corrects it.
 - Each meeting records which of those its date came from. The old dataset's dates are used as a
   cross-check only: they're "first Sunday after creation" without the one-meeting-per-Sunday
   constraint, and go backwards in week order in five places.
@@ -138,7 +147,8 @@ the enrichment in post 5 implement these rules.
 - **Spotify is the source** (post 5), because the club listens on Spotify and favorite track
   numbers refer to the edition actually played. An album is identified by the Spotify album ID
   of that edition, chosen in this order:
-  1. an `album_overrides` file in git;
+  1. an `album_overrides` file in git, then the album link entered in the app (an override
+     in git can still correct it);
   2. a Spotify track link on the page (64 of 163 meeting pages have one), when that track's
      album matches the page's artist and title; and
   3. a Spotify search on artist and title, keeping the editions where the most favorite and

@@ -1,0 +1,17 @@
+# The ratings app's packages (resources/album_club.app.yml). The app runs from src/, and
+# Databricks Apps installs from this file and uv.lock next to it. Nothing comes preinstalled,
+# so everything app/app.py and album_club import is listed. Update the lock with: uv lock --project src
+[project]
+name = "album_club_ratings_app"
+version = "0.0.1"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "beautifulsoup4>=4.15.0",
+    "databricks-sdk",
+    "databricks-sql-connector",
+    "pandas",
+    "streamlit",
+]
+
+[tool.uv]
+package = false

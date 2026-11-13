@@ -53,3 +53,23 @@ def bronze_pasted_ratings():
             F.current_timestamp().alias("ingested_at"),
         )
     )
+
+
+@dp.table(comment="Meetings entered in the ratings app (meetings/W###-*.json), as-is.")
+def bronze_entered_meetings():
+    # Meetings held after the export have no OneNote page; the app saves what the page title would
+    # have said, plus the date and the Spotify edition. They live next to the ratings tables.
+    exports_path = spark.conf.get("album_club.onenote_exports_path")  # noqa: F821
+    return (
+        spark.readStream.format("cloudFiles")  # noqa: F821
+        .option("cloudFiles.format", "text")
+        .option("wholetext", "true")
+        .option("pathGlobFilter", "*.json")
+        .load(exports_path)
+        .select(
+            F.col("_metadata.file_path").alias("source_file"),
+            F.col("_metadata.file_modification_time").alias("source_file_modified_at"),
+            F.col("value").alias("text"),
+            F.current_timestamp().alias("ingested_at"),
+        )
+    )

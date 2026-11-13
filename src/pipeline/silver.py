@@ -51,7 +51,12 @@ SELECTION_METHOD = (
 )
 
 
-@dp.temporary_view(comment="Meeting pages from the newest export, parsed.")
+ENTERED_MEETING = "week int, meeting_date date, artist string, album string, year int, spotify_album_id string"
+# A meeting entered in the app has no OneNote page; its page_number is this plus the week.
+APP_PAGE_NUMBERS = 100_000
+
+
+@dp.temporary_view(comment="Meeting pages from the newest export, parsed, and meetings entered in the app.")
 def meeting_pages():
     bronze = spark.read.table("bronze_onenote_pages")  # noqa: F821
     newest = bronze.agg(F.max("source_file_modified_at").alias("source_file_modified_at"))
@@ -59,7 +64,7 @@ def meeting_pages():
         [(int(r["week"]), r["album"], r["artist"]) for r in LISTEN_OVERRIDES],
         "week int, album string, artist_override string",
     )
-    return (
+    pages = (
         bronze.join(newest, "source_file_modified_at")
         .select("page_number", parse_meeting_page_udf("title", "created", "html").alias("page"))
         .where("page IS NOT NULL")
@@ -74,42 +79,85 @@ def meeting_pages():
             ).otherwise(F.col("review_reasons")),
         )
         .drop("artist_override")
-        .join(_pasted_tables(), "week", "left")
-        .withColumn(  # a pasted table replaces the page's own
-            "responses",
-            F.when(F.col("pasted_table").isNotNull(), parse_pasted_table_udf("week", "pasted_table")).otherwise(
-                F.col("responses")
+        .withColumn("app_date", F.lit(None).cast("date"))
+        .withColumn("spotify_album_id", F.lit(None).cast("string"))
+    )
+    entered = _entered_meetings().join(pages.select("week"), "week", "left_anti")  # a page wins
+    weeks_with_files = spark.read.table("rating_rows").select("week").distinct().withColumn("has_file", F.lit(True))  # noqa: F821
+    return (
+        pages.unionByName(entered)
+        .join(weeks_with_files, "week", "left")
+        .withColumn(  # the ratings came in a file instead
+            "review_reasons",
+            F.when(F.col("has_file"), F.filter("review_reasons", lambda r: r != "no ratings table")).otherwise(
+                F.col("review_reasons")
             ),
         )
-        .withColumn(
-            "review_reasons",
-            F.when(
-                F.col("pasted_table").isNotNull(),
-                F.filter("review_reasons", lambda r: r != "no ratings table"),
-            ).otherwise(F.col("review_reasons")),
-        )
-        .drop("pasted_table")
+        .drop("has_file")
     )
 
 
-def _pasted_tables():
-    """The newest pasted ratings table for each week, from file names like ratings_tables/W153.tsv."""
+def _entered_meetings():
+    """Meetings entered in the app, shaped like a parsed page. The newest file for a week wins."""
     newest = Window.partitionBy("week").orderBy(F.desc("source_file_modified_at"))
     return (
-        spark.read.table("bronze_pasted_ratings")  # noqa: F821
-        .withColumn("week", F.regexp_extract("source_file", r"/W(\d{3})\.tsv$", 1).cast("int"))
-        .where("week IS NOT NULL")
+        spark.read.table("bronze_entered_meetings")  # noqa: F821
+        .select("source_file_modified_at", F.from_json("text", ENTERED_MEETING).alias("m"))
+        .select("source_file_modified_at", "m.*")
         .withColumn("n", F.row_number().over(newest))
         .where("n = 1")
-        .select("week", F.col("text").alias("pasted_table"))
+        .select(
+            (F.lit(APP_PAGE_NUMBERS) + F.col("week")).alias("page_number"),
+            "week",
+            F.lit(None).cast("int").alias("list_number"),
+            "year",
+            "artist",
+            "album",
+            F.col("meeting_date").cast("timestamp").alias("created_at"),
+            F.lit(None).cast("date").alias("body_date"),
+            F.array().cast("array<int>").alias("tracks_played"),
+            F.array().cast("array<string>").alias("spotify_track_ids"),
+            F.array().cast(f"array<{RESPONSE}>").alias("responses"),
+            F.array().cast("array<string>").alias("review_reasons"),
+            F.col("meeting_date").alias("app_date"),
+            "spotify_album_id",
+        )
     )
+
+
+@dp.temporary_view(comment="Rows from ratings tables saved as files, pasted from OneNote or written by the app.")
+def rating_rows():
+    """For each week, person and listen, the row from the newest file wins. A file's week comes
+    from its name: ratings_tables/W153.tsv, or W160-20261115T190503120000.tsv from the app."""
+    rows = (
+        spark.read.table("bronze_pasted_ratings")  # noqa: F821
+        .withColumn("week", F.regexp_extract("source_file", r"/W(\d{3})[^/]*\.tsv$", 1).cast("int"))
+        .where("week IS NOT NULL")
+        .select("week", "source_file_modified_at", F.explode(parse_pasted_table_udf("week", "text")).alias("r"))
+    )
+    newest = Window.partitionBy("week", _response_key(), "r.listen").orderBy(F.desc("source_file_modified_at"))
+    return rows.withColumn("n", F.row_number().over(newest)).where("n = 1").select("week", "r")
+
+
+def _response_key():
+    """Who a response is from: the person, or the name as written if it matches no one."""
+    return F.coalesce("r.person", "r.name_as_written")
 
 
 @dp.temporary_view(comment="One row per person per listen, from every ratings table.")
 def responses():
-    return spark.read.table("meeting_pages").select(  # noqa: F821
-        "week", "page_number", F.explode("responses").alias("r")
+    """The page's rows, except where a file has a row for the same person and listen."""
+    pages = spark.read.table("meeting_pages")  # noqa: F821
+    from_files = spark.read.table("rating_rows")  # noqa: F821
+    replaced = from_files.select("week", _response_key().alias("key"), F.col("r.listen").alias("listen"))
+    from_pages = (
+        pages.select("week", "page_number", F.explode("responses").alias("r"))
+        .withColumn("key", _response_key())
+        .withColumn("listen", F.col("r.listen"))
+        .join(replaced, ["week", "key", "listen"], "left_anti")
+        .select("week", "page_number", "r")
     )
+    return from_pages.unionByName(from_files.join(pages.select("week", "page_number"), "week"))
 
 
 @dp.materialized_view(comment="Album club members and guests, from the people seed in git.")
@@ -129,6 +177,7 @@ def silver_meetings():
         .agg(
             F.to_date(F.min("created_at")).alias("created"),
             F.min("body_date").alias("body_date"),
+            F.min("app_date").alias("app_date"),
             F.count("*").alias("page_count"),
         )
     )
@@ -137,8 +186,8 @@ def silver_meetings():
         .groupBy("all_weeks")
         .applyInPandas(
             _assign_dates,
-            "week int, created date, body_date date, page_count long, meeting_date date, date_source string, "
-            "review_reason string",
+            "week int, created date, body_date date, app_date date, page_count long, meeting_date date, "
+            "date_source string, review_reason string",
         )
     )
 
@@ -146,11 +195,12 @@ def silver_meetings():
 def _assign_dates(_key, weeks: pd.DataFrame) -> pd.DataFrame:
     """Meeting dates are assigned in week order across all meetings, so this runs as one group."""
     records = [
-        {**r, "body_date": None if pd.isna(r["body_date"]) else r["body_date"]} for r in weeks.to_dict("records")
+        {**r, **{k: None if pd.isna(r[k]) else r[k] for k in ("body_date", "app_date")}}
+        for r in weeks.to_dict("records")
     ]
     dated = assign_meeting_dates(records, MEETING_DATE_OVERRIDES)
     return pd.DataFrame(dated)[
-        ["week", "created", "body_date", "page_count", "meeting_date", "date_source", "review_reason"]
+        ["week", "created", "body_date", "app_date", "page_count", "meeting_date", "date_source", "review_reason"]
     ]
 
 
@@ -167,6 +217,7 @@ def silver_listens():
         F.col("list_number").alias("list_number_in_title"),
         "tracks_played",
         "spotify_track_ids",
+        "spotify_album_id",
     )
     playlists = (
         spark.read.table("responses")  # noqa: F821
@@ -183,6 +234,7 @@ def silver_listens():
             F.lit(None).cast("int").alias("list_number_in_title"),
             F.array().cast("array<int>").alias("tracks_played"),
             F.array().cast("array<string>").alias("spotify_track_ids"),
+            F.lit(None).cast("string").alias("spotify_album_id"),
         )
     )
     order = Window.partitionBy("week").orderBy(F.col("listen"), "page_number")  # albums first, then playlist

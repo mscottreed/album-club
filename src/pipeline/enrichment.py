@@ -14,7 +14,7 @@ from pyspark.sql import functions as F
 
 import album_club
 from album_club import seeds
-from album_club.enrichment import crawl, match_listen
+from album_club.enrichment import crawl, listen_override, match_listen
 
 TRACK = (
     "struct<position:int, disc:int, track:int, title:string, artists:array<string>, duration_ms:long, "
@@ -50,7 +50,9 @@ def album_matches():
     rows = listens.join(numbers, "listen_id", "left").select(
         F.lit("listen").alias("kind"),
         F.col("listen_id").alias("key"),
-        F.to_json(F.struct("week", "artist", "album", "year", "spotify_track_ids", "favorites")).alias("value"),
+        F.to_json(
+            F.struct("week", "artist", "album", "year", "spotify_track_ids", "spotify_album_id", "favorites")
+        ).alias("value"),
     )
     responses = spark.read.table("bronze_api_responses").where("status = 200")  # noqa: F821
     rows = rows.unionByName(
@@ -86,7 +88,7 @@ def _match(_key, rows: pd.DataFrame) -> pd.DataFrame:
         listen = json.loads(value)
         favorites = [(f.get("disc"), f["track"]) for f in listen.get("favorites") or []]
         listen = {**listen, "spotify_track_ids": listen.get("spotify_track_ids") or []}
-        override = ALBUM_OVERRIDES.get(listen["week"], {})
+        override = listen_override(listen, ALBUM_OVERRIDES)
         match = match_listen(listen, crawl(listen, override, get), favorites, override, ALBUMS_1001)
         results.append((listen_id, json.dumps(match)))
     return pd.DataFrame(results, columns=["listen_id", "match"])

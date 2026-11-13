@@ -4,6 +4,7 @@ from album_club.enrichment import (
     clean_title,
     crawl,
     edition_tracks,
+    listen_override,
     match_1001,
     match_listen,
     names_match,
@@ -335,3 +336,10 @@ def test_spotify_track_ids_from_page_links():
         '<a href="https://open.spotify.com/track/5l7KTwdgBLrx2PhFHnYoQ4">again</a>'
     )
     assert spotify_track_ids(html) == ["5l7KTwdgBLrx2PhFHnYoQ4", "0000000000000000000002"]
+
+
+def test_an_album_entered_in_the_app_is_an_override_the_seed_can_correct():
+    listen = {"week": 160, "spotify_album_id": "entered"}
+    assert listen_override(listen, {}) == {"spotify_album_id": "entered"}
+    assert listen_override(listen, {160: {"spotify_album_id": "fixed"}}) == {"spotify_album_id": "fixed"}
+    assert listen_override({"week": 39, "spotify_album_id": None}, {39: {"year": "1963"}}) == {"year": "1963"}

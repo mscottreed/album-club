@@ -167,6 +167,11 @@ resources:
 
 `dataset_catalog` and `dataset_schema` let one file work for dev and prod. The queries just say
 `FROM agg_person_ratings`, and the bundle points them at `dev_scott_album_club` or `album_club`.
+A dashboard's queries run on a SQL warehouse, which is the compute Databricks uses for SQL from
+dashboards, the SQL editor and BI tools. It's separate from the serverless compute that runs the
+job and the pipeline. The dashboard never runs the pipeline. It only queries the gold tables the
+last pipeline run left behind.
+
 My Free Edition workspace has one SQL warehouse, so `warehouse_id` is a variable that looks it up
 by name:
 
@@ -260,6 +265,46 @@ databricks bundle run -t prod album_club_refresh
 It took about 11 minutes and only fetched 3 new responses, the MusicBrainz lookups for the real
 *69 Love Songs*. Every gold table in prod has the same number of rows as in dev, the averages
 match, and `silver_review` is still empty.
+
+### Letting the club in
+
+The dashboard is for everyone in the club, so I added each member as a user in the workspace
+settings, and they sign in with their Google accounts at the dashboard's link. Seeing the
+numbers takes two kinds of permission, and Databricks keeps them separate:
+
+- Workspace permissions cover objects in the workspace, like dashboards, jobs and apps. Opening
+  the dashboard needs `CAN_RUN` on it.
+- Unity Catalog grants cover data. Normally a dashboard's queries run as the person viewing it,
+  so they'd also need `SELECT` on the gold tables.
+
+I didn't want to hand out that second one. The schema also holds bronze, and bronze has
+everyone's full names. Publishing the dashboard with embedded credentials gets around it. The
+queries run as the publisher, which in prod is the service principal, so members need nothing in
+Unity Catalog. Both settings go on the prod target:
+
+```yaml
+  prod:
+    resources:
+      dashboards:
+        album_club_dashboard:
+          embed_credentials: true
+          permissions:
+            - group_name: users
+              level: CAN_RUN
+```
+
+Adding the members also meant changing the grant from part 3. It went to `account users`, which
+was just me and the service principal until there were other users. Now it goes to me only,
+through a variable in `databricks.yml`:
+
+```yaml
+      grants:
+        - principal: ${var.admin_user}
+          privileges: [USE_SCHEMA, SELECT, READ_VOLUME, WRITE_VOLUME]
+```
+
+The bundle adds grants but doesn't revoke ones it no longer lists, so after deploying that I
+revoked the old `account users` grant by hand on both the dev and prod schemas.
 
 ## Next: an app for entering this week's ratings
 

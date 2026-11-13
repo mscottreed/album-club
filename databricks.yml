@@ -38,6 +38,11 @@ targets:
     variables:
       catalog: workspace
       secret_scope: dev_${workspace.current_user.short_name}_album_club
+    resources:
+      apps:
+        ratings_app:
+          # Development mode doesn't prefix app names, and prod's app is album-club-ratings.
+          name: dev-${workspace.current_user.short_name}-album-club-ratings
   prod:
     mode: production
     workspace:

@@ -1,7 +1,8 @@
 """Work out when each meeting happened. OneNote only records when a page was created.
 
-The rules are in docs/data-decisions.md: an override, else a date written in the page body
-within 3 weeks of creation, else the first Sunday after creation that's after the previous meeting.
+The rules are in docs/data-decisions.md: an override, else the date entered in the app, else a
+date written in the page body within 3 weeks of creation, else the first Sunday after creation
+that's after the previous meeting.
 """
 
 import datetime as dt
@@ -24,6 +25,8 @@ def assign_meeting_dates(meetings: list[dict], overrides: dict[int, dt.date]) ->
         review = None
         if m["week"] in overrides:
             date, source = overrides[m["week"]], "override"
+        elif m.get("app_date") is not None:  # entered in the app, which asks for the date
+            date, source = m["app_date"], "app"
         elif m["body_date"] is not None:
             date, source = m["body_date"], "page"
         else:

@@ -34,6 +34,13 @@ Get = Callable[[str, str], dict | None]
 MATCH = 0.85  # minimum similarity for two names to count as the same
 
 
+def listen_override(listen: dict, overrides: dict[int, dict]) -> dict:
+    """The listen's row in album_overrides, plus the Spotify album entered in the app for meetings
+    entered there. The seed wins, so it can correct a wrong link."""
+    entered = {"spotify_album_id": listen["spotify_album_id"]} if listen.get("spotify_album_id") else {}
+    return {**entered, **overrides.get(listen["week"], {})}
+
+
 def crawl(listen: dict, override: dict, get: Get) -> dict:
     """Every API response enrichment needs for one album listen.
 

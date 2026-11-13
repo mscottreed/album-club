@@ -151,6 +151,12 @@ def test_meeting_date_override_wins_and_out_of_order_dates_are_flagged():
     assert dated[1]["review_reason"] == "not after the previous meeting (2022-02-06)"
 
 
+def test_a_date_entered_in_the_app_is_used_as_is():
+    meetings = [{"week": 160, "created": dt.date(2026, 11, 18), "body_date": None, "app_date": dt.date(2026, 11, 18)}]
+    (dated,) = assign_meeting_dates(meetings, overrides={})
+    assert (dated["meeting_date"], dated["date_source"]) == (dt.date(2026, 11, 18), "app")
+
+
 # --- people
 
 

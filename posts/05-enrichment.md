@@ -50,6 +50,16 @@ secret_scopes:
     name: ${var.secret_scope}
 ```
 
+A secret scope is a named set of secrets in the workspace, with its own permissions. Code reads a
+value by scope and key:
+
+```python
+dbutils.secrets.get(args.secret_scope, "spotify-client-secret")
+```
+
+If a secret's value ever shows up in a notebook's or a job's output, Databricks prints
+`[REDACTED]` instead.
+
 The variable defaults to `album_club`, and the dev target sets
 `dev_${workspace.current_user.short_name}_album_club`, so dev and prod get separate scopes.
 [docs/secrets.md](../docs/secrets.md) has the steps for creating the Spotify app and the
@@ -99,6 +109,11 @@ jobs:
         pipeline_task:
           pipeline_id: ${resources.pipelines.album_club_pipeline.id}
 ```
+
+A job's tasks don't all have to be the same kind. A `pipeline_task` runs an update of a pipeline
+the bundle defines, and a `spark_python_task` runs a Python file on serverless compute.
+`depends_on` sets the order, so each task starts only after the one before it succeeds. Both
+pipeline tasks point at the same pipeline, and each update refreshes every table in it.
 
 The first update builds `silver_listens`. `fetch_enrichment.py` reads it, calls the APIs for
 anything it hasn't asked before, and writes the raw responses as JSON lines to a new

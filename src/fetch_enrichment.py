@@ -15,7 +15,7 @@ from databricks.sdk.runtime import dbutils
 from pyspark.sql import SparkSession
 
 from album_club import apis, seeds
-from album_club.enrichment import crawl
+from album_club.enrichment import crawl, listen_override
 
 KEPT_STATUSES = (200, 404)  # anything else might work next time, so it isn't kept
 
@@ -61,7 +61,7 @@ def main():
     overrides = seeds.album_overrides()
     listens = spark.table(f"{args.catalog}.{args.schema}.silver_listens").where("listen = 'album'").orderBy("week")
     for listen in listens.collect():
-        crawl(listen.asDict(), overrides.get(listen.week, {}), get)
+        crawl(listen.asDict(), listen_override(listen.asDict(), overrides), get)
         if len(new) >= 100:
             save()
     save()

@@ -1,0 +1,49 @@
+resources:
+  apps:
+    ratings_app:
+      name: album-club-ratings
+      description: The host enters each meeting's album and ratings.
+      # src/ so the app can import album_club and check rows with the pipeline's own parser.
+      source_code_path: ../src
+      config:
+        command: [streamlit, run, app/app.py]
+        env:
+          - name: ALBUM_CLUB_CATALOG
+            value: ${var.catalog}
+          - name: ALBUM_CLUB_SCHEMA
+            value: ${resources.schemas.album_club.name}
+          - name: ALBUM_CLUB_ADMIN
+            value: ${var.admin_user}
+          - name: DATABRICKS_WAREHOUSE_ID
+            value_from: sql-warehouse
+          - name: ALBUM_CLUB_REFRESH_JOB_ID
+            value_from: refresh-job
+      # The app's own service principal gets exactly these: it writes files next to the
+      # OneNote exports, reads the two tables it shows, and starts the refresh after a save.
+      resources:
+        - name: refresh-job
+          job:
+            id: ${resources.jobs.album_club_refresh.id}
+            permission: CAN_MANAGE_RUN
+        - name: sql-warehouse
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: CAN_USE
+        - name: onenote-exports
+          uc_securable:
+            securable_type: VOLUME
+            securable_full_name: ${var.catalog}.${resources.schemas.album_club.name}.${resources.volumes.onenote_exports.name}
+            permission: WRITE_VOLUME
+        - name: dim-album
+          uc_securable:
+            securable_type: TABLE
+            securable_full_name: ${var.catalog}.${resources.schemas.album_club.name}.dim_album
+            permission: SELECT
+        - name: silver-ratings
+          uc_securable:
+            securable_type: TABLE
+            securable_full_name: ${var.catalog}.${resources.schemas.album_club.name}.silver_ratings
+            permission: SELECT
+      permissions:
+        - group_name: users
+          level: CAN_USE

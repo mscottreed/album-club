@@ -183,8 +183,26 @@ struct, and the silver tables are materialized views built from it:
 | `silver_people` | person, from the seed |
 | `silver_review` | anything the parser flagged |
 
+Bronze is a streaming table, which only adds rows for new files. A materialized view works
+differently. It's defined by a query, and each pipeline update leaves it holding that query's
+result over everything in its sources. Databricks refreshes some materialized views
+incrementally, but the result is always the same as recomputing from scratch. That's what silver
+needs, because when a parsing rule changes, it has to apply to every page, not just new ones.
+
 `silver_ratings` has expectations that every rating is between 0 and 10 and every name matched a
-person. Each meeting date depends on the one before it, so `silver_meetings` runs the date
+person. An expectation is a data quality check declared on the table:
+
+```python
+@dp.expect("rating_in_range", "rating IS NULL OR rating BETWEEN 0 AND 10")
+@dp.expect("person_matched", "person IS NOT NULL")
+```
+
+With plain `expect`, a row that fails is still written, and the pipeline counts the failures for
+each expectation in the update's details. `expect_or_drop` would leave the row out, and
+`expect_or_fail` would stop the update. Every expectation in this project is plain `expect`, so a
+bad row stays in the table where I can see it.
+
+Each meeting date depends on the one before it, so `silver_meetings` runs the date
 function over every week at once with `applyInPandas`.
 
 Three things broke on the way. The first was that `applyInPandas` call. I grouped by a literal to
@@ -195,7 +213,13 @@ unresolvedordinal(1)". Spark reads a literal integer in `groupBy` as a column po
 return per_week.withColumn("all_weeks", F.lit(1)).groupBy("all_weeks").applyInPandas(...)
 ```
 
-Next, the UDF failed on the workers with `ModuleNotFoundError: No module named 'album_club'`. The bronze UDF from part 3 had worked, so something in the larger silver parser was being pickled as
+The next one needs a bit of background on how Spark runs code. Spark splits the work between a
+driver, which runs your pipeline code and plans the queries, and workers, which carry out the
+plan on chunks of the data. A Python UDF runs on the workers, so Spark pickles the function on
+the driver and sends it over. Anything the function refers to has to travel with it or already be
+installed on the worker.
+
+The UDF failed on the workers with `ModuleNotFoundError: No module named 'album_club'`. The bronze UDF from part 3 had worked, so something in the larger silver parser was being pickled as
 a reference to the package, which the workers then tried to import. I tried the bundle template's
 approach of installing the project with `--editable ${workspace.file_path}`, and it didn't help.
 cloudpickle has an API for this case, a local package the workers don't have:
