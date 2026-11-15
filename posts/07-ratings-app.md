@@ -6,8 +6,8 @@ page into Databricks means exporting it from Windows OneNote, and I don't want t
 time we meet. So from now on I enter the ratings in an app, and the OneNote export stays a
 one-time import of the history.
 
-This post builds that app as a Databricks App, deployed by the bundle, and works out how what
-it saves joins the OneNote history in silver.
+This post builds that app as a Databricks App, deployed by the bundle, and works out how the
+ratings it saves join the OneNote history in silver.
 
 The code for this post is tagged `post-07` in
 [mscottreed/album-club](https://github.com/mscottreed/album-club).
@@ -53,8 +53,7 @@ to store them in. It also fits the medallion layout from part 3. The app only sa
 next to the export, Auto Loader turns it into bronze rows, and the pipeline stays the only thing
 that writes tables.
 
-The difference is that the app never overwrites anything. Each save is a new file with the time
-in its name:
+The app never overwrites a file, though. Each save is a new file with the time in its name:
 
 ```text
 ratings_tables/W159-20261112T043037283484.tsv
@@ -82,17 +81,17 @@ everyone else's alone.
 
 A meeting that's newer than the export has no page at all, so the app saves the meeting too, as
 a small JSON file in `meetings/`. Silver turns it into something shaped like a parsed page and
-adds it to the real ones, and from there it goes through the same steps. Two things come from
-the app instead of being worked out. The meeting date is the one I typed in, so it doesn't need
-the Sunday rule from part 4. And the Spotify link picks the edition, the same way an
-`album_overrides` entry does in part 5, so there's no search. An override in git still wins if
-the link turns out to be wrong.
+adds it to the real ones, and from there it goes through the same steps. The meeting date is the
+one I typed in, so it doesn't need the Sunday rule from part 4. The Spotify link picks the
+edition, the same way an `album_overrides` entry does in part 5, so there's no search. An
+override in git still wins if the link turns out to be wrong.
 
 ## Checking before saving
 
 A rating the parser can't read would stop the pipeline, so the app checks every row with the
-pipeline's own parser before it saves anything. That works because the app deploys the whole `src/` folder, the same one the
-pipeline imports `album_club` from, so the shorthand rules from part 4 live in one place:
+pipeline's own parser before it saves anything. That works because the app deploys the whole
+`src/` folder, the same one the pipeline imports `album_club` from, so the shorthand rules from
+part 4 live in one place:
 
 ```python
 for name, rating, favorites in rows:
@@ -114,7 +113,7 @@ as a red error next to the name, and nothing is saved.
 
 ## The app as a bundle resource
 
-The app is another resource in the bundle:
+It lives in `resources/album_club.app.yml`, next to the bundle's other resources:
 
 ```yaml
 resources:
@@ -170,20 +169,18 @@ as an environment variable:
             permission: SELECT
 ```
 
-So the app can use the exports volume, read the two tables it shows, and start the refresh job,
-and it has no access to any other table in the schema.
+The app gets the exports volume, the two tables it shows and the refresh job, and no other table
+in the schema.
 
-An app can work with data in two ways. With app authorization, everything it does runs as its
-service principal, which is what this app does. With user authorization, Databricks also hands
-the app a token for the signed-in person, and the app can query as them, limited by their own
-grants. The club members have no grants at all (part 6), so app authorization is the one that
-works here. It's also what will let them fix their own ratings in post 8 without getting any
-access to the data.
+Everything the app does runs as that service principal. Databricks calls this app
+authorization. Apps can also use user authorization, where Databricks hands the app a token for
+the signed-in person and the app queries as them, limited by their own grants. The club members
+have no grants at all (part 6), so app authorization is the one that works here. It's also what
+will let them fix their own ratings in post 8 without getting any access to the data.
 
-The service principal's credentials reach the app as environment variables that Databricks
-sets. The Databricks SDK finds them on its own, so `WorkspaceClient()` and `Config()` need no
-arguments and there are no secrets in the code. `value_from` is only for the IDs of the
-resources:
+The service principal's credentials reach the app as environment variables too, separate from
+the `value_from` ones. The Databricks SDK finds them on its own, so `WorkspaceClient()` and
+`Config()` need no arguments and there are no secrets in the code:
 
 ```python
 config = Config()  # the app's service principal, from the environment
@@ -193,17 +190,16 @@ def save(path: str, text: str) -> None:
     WorkspaceClient().files.upload(f"{EXPORTS}/{path}", io.BytesIO(text.encode()), overwrite=False)
 ```
 
-Deploying an app takes two steps. `databricks bundle deploy` uploads `src/` to the workspace
-and creates or updates the app, and `databricks bundle run ratings_app` takes a snapshot of that
-code, installs its packages and starts the app. A code change needs both, or the app keeps
-running the old snapshot.
+`databricks bundle deploy` uploads `src/` to the workspace and creates or updates the app, and
+`databricks bundle run ratings_app` takes a snapshot of that code, installs its packages and
+starts the app. Until the second command runs, the app keeps running the old snapshot.
 
 The packages come from the app's own folder, `src/`, not from the repo's `pyproject.toml`. If
 there's a `requirements.txt` there, the app installs it with pip on Python 3.11, with some
 libraries preinstalled. If there's a `pyproject.toml` and a `uv.lock` instead, it installs from
 the lock file with uv, using the Python version from `requires-python`, with nothing
-preinstalled. I wasn't going to argue for lock files in part 1 and then skip one here, so `src/`
-has a small uv project of its own for the app:
+preinstalled. Part 1 is where I picked uv for its lock file, so `src/` has a small uv project of
+its own for the app:
 
 ```toml
 [project]
@@ -229,13 +225,13 @@ package = false
 [BUILD] [INFO] Dependencies installed successfully with uv.
 ```
 
-So the app runs on the same Python 3.12 as the jobs and the pipeline, with every package pinned.
-Since nothing is preinstalled, the list has everything the code imports, including `pandas`,
-which `app.py` uses directly.
+The app now runs on the same Python 3.12 as the jobs and the pipeline, with every package
+pinned. Nothing is preinstalled, so the list has everything the code imports, including
+`pandas`, which `app.py` uses directly.
 
-One gotcha: development mode prefixes jobs and pipelines with `[dev scott]`, but it doesn't
-prefix app names. My first dev deploy created an app called `album-club-ratings`, which is the
-name prod wants. The dev target now sets its own name:
+Development mode prefixes jobs and pipelines with `[dev scott]`, but it leaves app names alone,
+so my first dev deploy created an app called `album-club-ratings`, the name prod wants. The dev
+target now sets its own name:
 
 ```yaml
 targets:
@@ -282,16 +278,69 @@ Miles Davis' *Kind of Blue* (W159) was the album I left out of part 6, since we 
 started this project. It has a OneNote page, so I only needed the ratings part of the app. I
 entered them in dev, and after the refresh W159 had 5 ratings and 11 favorite-song picks.
 `fact_ratings` went from 1,041 rows to 1,046 and the unrated albums from 110 to 105, so W159 was
-the only thing that changed. Nothing landed in `silver_review`.
+the only thing that changed. The parser didn't flag any of the new rows, so `silver_review`
+stayed empty.
 
-One Free Edition limit showed up while I was testing. An app stops 24 hours after it starts, and
-when I went back to it the next day I got "App Not Available". `databricks bundle run
-ratings_app` starts it again. For now that means starting it before a meeting; part 9 is about
-running things on a schedule, and starting the app can go there too.
+On Free Edition an app stops 24 hours after it starts, and when I went back to the dev app the
+next day I got "App Not Available". Starting it again brings back the last deployment, so for
+now I start it before a meeting. Part 9 is about running things on a schedule, and starting the
+app can go there too.
 
 ## Prod
 
-<!-- TODO: the CI deploy output, starting the prod app, and entering W159 there. -->
+Fast-forwarding `v2-from-scratch` ran the checks and then the deploy, and the deploy failed on
+the app:
+
+```text
+Error: cannot create resources.apps.ratings_app: Cannot add volume "workspace.album_club.onenote_exports": all account users lack USE CATALOG permission on catalog "workspace", and the user does not have MANAGE permission on the catalog to grant it to the app's service principal. (403 PERMISSION_DENIED)
+```
+
+Every app gets a new service principal, and to reach a volume it needs `USE CATALOG` on the
+catalog. The bundle grants that only if every account user already has it, or if whoever is
+deploying has `MANAGE` on the catalog. In dev the deploy runs as me, and I'm an admin. In prod it
+runs as the CI service principal, which only has the `CREATE SCHEMA` grant from part 3.
+
+`USE CATALOG` on its own doesn't show anyone any data. It only lets them look inside the catalog,
+and the club members already had it through the workspace's users group. So I granted it to
+`account users`, another one-time command like the one in part 3:
+
+```bash
+databricks grants update catalog workspace --json '{"changes": [{"principal": "account users", "add": ["USE_CATALOG"]}]}'
+```
+
+Re-running the failed deploy created the app:
+
+```text
+Created apps.ratings_app
+Created apps.ratings_app.permissions
+Files: 60 uploaded, 0 deleted
+Resources: 2 created, 0 changed, 0 deleted, 14 unchanged
+```
+
+Creating an app doesn't start it. `databricks bundle run ratings_app -t prod` would, but from my
+laptop it hits the same `run_as` check as the dashboard did in part 6:
+
+```text
+Error: apps do not support a setting a run_as user that is different from the owner.
+```
+
+For the first prod start I used the apps commands directly. `databricks apps start` starts
+the app's compute, and `databricks apps deploy` takes the snapshot of the code CI uploaded. The
+start command and environment variables in the bundle don't come along on their own when you
+deploy this way, and my first try ran the wrong thing and crashed. The second passed them in a
+JSON file with the same command and variables as the bundle:
+
+```bash
+databricks apps start album-club-ratings
+databricks apps deploy album-club-ratings --json @app-deploy.json
+```
+
+After that, starting the app is just `databricks apps start album-club-ratings`, which brings
+back the last deployment with its settings.
+
+Then I entered *Kind of Blue* in the prod app. Saving started `album_club_refresh`, which took
+11.6 minutes, and prod came out the same as dev. W159 has 5 ratings and 11 favorite-song picks,
+`fact_ratings` has 1,046 rows, there are 105 unrated albums, and `silver_review` is still empty.
 
 ## Next: members fixing their own ratings
 
