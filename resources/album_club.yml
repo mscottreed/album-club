@@ -6,12 +6,15 @@ resources:
       comment: Album club data, from raw OneNote exports to gold tables.
       # In prod the CI service principal owns the schema, so I need a grant to upload exports and
       # query tables. Grants on a schema apply to its volumes and tables too. The schema holds the
-      # raw export, with full names, so the grant goes to me, not to club members. The bundle
-      # adds these grants but doesn't revoke ones it no longer lists: when this grant moved off
-      # 'account users', that one had to be revoked by hand.
+      # raw export, with full names, so the grant goes to me, not to club members. When this grant
+      # moved off 'account users', that one had to be revoked by hand.
       grants:
         - principal: ${var.admin_user}
           privileges: [USE_SCHEMA, SELECT, READ_VOLUME, WRITE_VOLUME]
+        # The ratings app's resources grant its service principal USE_SCHEMA here, but each deploy
+        # sets this schema's grants back to this list and drops it, so it has to be listed too.
+        - principal: ${resources.apps.ratings_app.service_principal_client_id}
+          privileges: [USE_SCHEMA]
 
   volumes:
     onenote_exports:

@@ -4,7 +4,9 @@ form as a table copied out of OneNote, so the pipeline reads both the same way.
 The rules are in docs/data-decisions.md.
 """
 
+import csv
 import datetime as dt
+import io
 import json
 import re
 
@@ -36,13 +38,26 @@ def meeting_file(week: int, meeting_date: dt.date, artist: str, album: str, year
 
 
 def ratings_file(rows: list[tuple[str, str, str]]) -> str:
-    """Rows of (name, rating, favorites) as a tab-separated ratings table, header first."""
-    return "".join("\t".join(cells) + "\n" for cells in [HEADER, *rows])
+    """Rows of (name, rating, favorites) as a tab-separated ratings table, header first. A return or
+    tab inside a cell, like one pasted along with a rating, would start a new row or cell, so any run
+    of whitespace becomes one space."""
+    return "".join("\t".join(" ".join(cell.split()) for cell in cells) + "\n" for cells in [HEADER, *rows])
 
 
 def file_name(folder: str, week: int, extension: str, at: dt.datetime) -> str:
     """A new file for each save, named so the newest sorts last: ratings_tables/W160-20261115T190503120000.tsv."""
     return f"{folder}/W{week:03d}-{at:%Y%m%dT%H%M%S%f}.{extension}"
+
+
+def members_by_email(text: str, people: list[dict]) -> dict[str, str]:
+    """Who each signed-in email is, from members.csv (email,person). Emails match without case, and a
+    row whose person isn't in the people seed is left out, so it can't write a rating for anyone."""
+    known = {p["person"] for p in people}
+    return {
+        row["email"].strip().lower(): row["person"].strip()
+        for row in csv.DictReader(io.StringIO(text))
+        if row["person"].strip() in known
+    }
 
 
 def check_rows(week: int, rows: list[tuple[str, str, str]], people: list[dict]) -> dict[str, list[str]]:
@@ -58,7 +73,10 @@ def check_rows(week: int, rows: list[tuple[str, str, str]], people: list[dict]) 
         if any(not 0 <= value <= 10 for value in values):
             problems[name] = ["the rating has to be between 0 and 10"]
             continue
-        (response,) = parse_pasted_table(week, ratings_file([(name, rating, favorites)]), people, {})
-        if response["review_reasons"]:
-            problems[name] = response["review_reasons"]
+        responses = parse_pasted_table(week, ratings_file([(name, rating, favorites)]), people, {})
+        if len(responses) > 1:  # "8.4 (A), 9.8 (P)" rates an album and a playlist
+            problems[name] = ["the app is for one-album weeks, so leave out (A) and (P)"]
+            continue
+        if responses[0]["review_reasons"]:
+            problems[name] = responses[0]["review_reasons"]
     return problems

@@ -3,7 +3,14 @@ import json
 
 import pytest
 
-from album_club.app_entries import check_rows, file_name, meeting_file, ratings_file, spotify_album_id
+from album_club.app_entries import (
+    check_rows,
+    file_name,
+    meeting_file,
+    members_by_email,
+    ratings_file,
+    spotify_album_id,
+)
 
 PEOPLE = [
     {"person": "Alex B", "first_name": "Alex", "last_initial": "B"},
@@ -61,5 +68,21 @@ def test_check_rows_reports_each_problem_by_name():
     assert "matches no one" in problems["Pat Q"][0]
 
 
+def test_returns_inside_a_cell_stay_in_one_row():
+    rows = [("Alex B", "7.5\n", "3, 1,\r\n7"), ("Sam C", "6\t", "")]
+    assert ratings_file(rows).splitlines()[1:] == ["Alex B\t7.5\t3, 1, 7", "Sam C\t6\t"]
+    assert check_rows(160, rows, PEOPLE) == {}
+
+
+def test_check_rows_rejects_an_album_and_a_playlist():
+    problems = check_rows(122, [("Alex B", "8.4 (A), 9.8 (P)", "7, 8, 10")], PEOPLE)
+    assert "one-album weeks" in problems["Alex B"][0]
+
+
 def test_check_rows_rejects_ratings_out_of_range():
     assert "between 0 and 10" in check_rows(160, [("Alex B", "11", "")], PEOPLE)["Alex B"][0]
+
+
+def test_members_by_email():
+    text = "email,person\nAlex@Example.com ,Alex B\nsam@example.com,Sam C\nstranger@example.com,Pat Q\n"
+    assert members_by_email(text, PEOPLE) == {"alex@example.com": "Alex B", "sam@example.com": "Sam C"}
