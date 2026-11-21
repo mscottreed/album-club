@@ -86,3 +86,7 @@ def test_check_rows_rejects_ratings_out_of_range():
 def test_members_by_email():
     text = "email,person\nAlex@Example.com ,Alex B\nsam@example.com,Sam C\nstranger@example.com,Pat Q\n"
     assert members_by_email(text, PEOPLE) == {"alex@example.com": "Alex B", "sam@example.com": "Sam C"}
+
+
+def test_members_by_email_without_a_header():
+    assert members_by_email("alex@example.com,Alex B\n", PEOPLE) == {"alex@example.com": "Alex B"}

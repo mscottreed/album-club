@@ -50,13 +50,14 @@ def file_name(folder: str, week: int, extension: str, at: dt.datetime) -> str:
 
 
 def members_by_email(text: str, people: list[dict]) -> dict[str, str]:
-    """Who each signed-in email is, from members.csv (email,person). Emails match without case, and a
-    row whose person isn't in the people seed is left out, so it can't write a rating for anyone."""
+    """Who each signed-in email is, from members.csv: email,person on each line, with or without that
+    header. Emails match without case, and a line whose person isn't in the people seed (the header
+    included) is left out, so it can't write a rating for anyone."""
     known = {p["person"] for p in people}
     return {
-        row["email"].strip().lower(): row["person"].strip()
-        for row in csv.DictReader(io.StringIO(text))
-        if row["person"].strip() in known
+        row[0].strip().lower(): row[1].strip()
+        for row in csv.reader(io.StringIO(text))
+        if len(row) == 2 and row[1].strip() in known
     }
 
 

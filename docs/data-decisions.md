@@ -29,7 +29,7 @@ the enrichment in post 5 implement these rules.
 - Members change their own rating in the app (post 8). Each save is a file with one row, theirs,
   so the newest-row rule replaces only their rating. The app knows who someone is from
   `members.csv` in the same volume: `email,person`, one line per member, with the person as
-  written in the people seed. It holds the members' sign-in emails, so it's kept in the volume
+  written in the people seed (a header line is optional). It holds the members' sign-in emails, so it's kept in the volume
   and a gitignored local `data/` folder, never in git. The pipeline doesn't read it (Auto Loader
   only picks up `.mht`, `.tsv` and `.json` files). A line whose person isn't in the seed is
   ignored, and an email that isn't listed gets no form.
