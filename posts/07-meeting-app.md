@@ -1,4 +1,4 @@
-# Album Club on Databricks, Part 7: An App for Entering Ratings
+# Album Club on Databricks, Part 7: An App for Entering Meetings
 
 At every meeting each of us rates the album and names our favorite songs, and for five years
 all of that went onto a OneNote page. We still use OneNote to run the meetings. But getting a

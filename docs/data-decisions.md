@@ -22,7 +22,17 @@ the enrichment in post 5 implement these rules.
 - A meeting with no OneNote page is entered in the app as `meetings/W###-<timestamp>.json`:
   week, date, artist, album, year and the Spotify album ID. The newest file per week is used,
   and only for weeks with no page. One ratings file applies to every page of its week, so the
-  app is for one-album weeks.
+  app is for one-album weeks. It turns down a rating marked `(A)` or `(P)`, and a member can't
+  open a week with more than one listen (W003, W107, W109, W122, W133).
+- A return or tab inside a pasted rating or favorites cell becomes a space, so the cell stays on
+  its row of the file.
+- Members change their own rating in the app (post 8). Each save is a file with one row, theirs,
+  so the newest-row rule replaces only their rating. The app knows who someone is from
+  `members.csv` in the same volume: `email,person`, one line per member, with the person as
+  written in the people seed. It holds the members' sign-in emails, so it's kept in the volume
+  and a gitignored local `data/` folder, never in git. The pipeline doesn't read it (Auto Loader
+  only picks up `.mht`, `.tsv` and `.json` files). A line whose person isn't in the seed is
+  ignored, and an email that isn't listed gets no form.
 
 ## Pages
 

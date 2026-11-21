@@ -30,7 +30,6 @@ from album_club.app_entries import (
 )
 
 CATALOG, SCHEMA = os.environ["ALBUM_CLUB_CATALOG"], os.environ["ALBUM_CLUB_SCHEMA"]
-TABLES = f"{CATALOG}.{SCHEMA}"
 EXPORTS = f"/Volumes/{CATALOG}/{SCHEMA}/onenote_exports"
 ADMIN = os.environ["ALBUM_CLUB_ADMIN"]
 PEOPLE = seeds.people()
@@ -47,6 +46,9 @@ def query(statement: str, params: dict | None = None) -> list[dict]:
             server_hostname=config.host,
             http_path=f"/sql/1.0/warehouses/{os.environ['DATABRICKS_WAREHOUSE_ID']}",
             credentials_provider=lambda: config.authenticate,
+            # Queries name tables without a catalog and schema, so the SQL is never built from strings.
+            catalog=CATALOG,
+            schema=SCHEMA,
         ) as connection,
         connection.cursor() as cursor,
     ):
@@ -58,7 +60,7 @@ def query(statement: str, params: dict | None = None) -> list[dict]:
 @st.cache_data(ttl=60)
 def all_meetings() -> list[dict]:
     """Every meeting, newest first."""
-    return query(f"SELECT week, artist, album, meeting_date FROM {TABLES}.dim_album ORDER BY week DESC")
+    return query("SELECT week, artist, album, meeting_date FROM dim_album ORDER BY week DESC")
 
 
 @st.cache_data(ttl=60)
@@ -73,17 +75,13 @@ def members() -> dict[str, str]:
 
 def recorded_ratings(week: int) -> dict[str, tuple[str, str]]:
     """What's already recorded for a week: person -> (rating, favorites) as written."""
-    rows = query(
-        f"SELECT person, rating_raw, favorites_raw FROM {TABLES}.silver_ratings WHERE week = :week", {"week": week}
-    )
+    rows = query("SELECT person, rating_raw, favorites_raw FROM silver_ratings WHERE week = :week", {"week": week})
     return {r["person"]: (r["rating_raw"] or "", r["favorites_raw"] or "") for r in rows}
 
 
 def listen_count(week: int) -> int:
     """How many albums and playlists a week had. Most weeks had one."""
-    rows = query(
-        f"SELECT count(DISTINCT listen_id) AS n FROM {TABLES}.silver_ratings WHERE week = :week", {"week": week}
-    )
+    rows = query("SELECT count(DISTINCT listen_id) AS n FROM silver_ratings WHERE week = :week", {"week": week})
     return rows[0]["n"]
 
 
