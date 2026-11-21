@@ -121,10 +121,13 @@ def my_ratings(person: str) -> None:
         st.info(f"W{week:03d} had more than one album or a playlist, and the app is for one-album weeks.")
         return
     rating, favorites = recorded_ratings(week).get(person, ("", ""))
-    rating = st.text_input("Rating", rating, key=f"my_rating_{week}")
-    favorites = st.text_input("Favorite songs", favorites, key=f"my_favorites_{week}")
-    st.caption("Favorites like `3, 1, 7` or `2, ... (x5)`, the way the OneNote pages do.")
-    if st.button("Save", type="primary", key="my_save"):
+    # In a form, Enter in either box saves, the same as the Save button.
+    with st.form(f"my_form_{week}"):
+        rating = st.text_input("Rating", rating)
+        favorites = st.text_input("Favorite songs", favorites)
+        st.caption("Favorites like `3, 1, 7` or `2, ... (x5)`, the way the OneNote pages do.")
+        submitted = st.form_submit_button("Save", type="primary")
+    if submitted:
         rows = [(person, rating.strip(), favorites.strip())]
         problems = check_rows(week, rows, PEOPLE)
         if problems:

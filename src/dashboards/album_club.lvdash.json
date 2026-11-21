@@ -205,7 +205,9 @@
       "displayName": "Album tracks",
       "queryLines": [
         "SELECT t.position, t.title, coalesce(CAST(k.rank AS STRING), '') AS rank,\n",
-        "  CASE WHEN k.liked THEN 'liked' ELSE 'not liked' END AS opinion\n",
+        "  CASE WHEN k.liked THEN 'liked' ELSE 'not liked' END AS opinion,\n",
+        "  t.duration_ms,\n",
+        "  format_string('%d:%02d', t.duration_ms DIV 60000, (t.duration_ms DIV 1000) % 60) AS length\n",
         "FROM fact_track_picks k\n",
         "JOIN dim_track t USING (listen_id, position)\n",
         "JOIN dim_album a USING (listen_id)\n",
@@ -1082,6 +1084,10 @@
                     {
                       "name": "opinion",
                       "expression": "`opinion`"
+                    },
+                    {
+                      "name": "length",
+                      "expression": "`length`"
                     }
                   ]
                 }
@@ -1177,13 +1183,40 @@
                     "useMonospaceFont": false
                   },
                   {
+                    "fieldName": "length",
+                    "displayName": "length",
+                    "title": "Length",
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 3,
+                    "alignContent": "right",
+                    "allowHTML": false,
+                    "allowSearch": false,
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "highlightLinks": false,
+                    "imageHeight": "",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "linkOpenInNewTab": true,
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "preserveWhitespace": false,
+                    "useMonospaceFont": false
+                  },
+                  {
                     "fieldName": "opinion",
                     "displayName": "opinion",
                     "title": "",
                     "type": "string",
                     "displayAs": "string",
                     "visible": true,
-                    "order": 3,
+                    "order": 4,
                     "alignContent": "left",
                     "allowHTML": false,
                     "allowSearch": false,
