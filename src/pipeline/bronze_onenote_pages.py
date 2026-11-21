@@ -55,10 +55,11 @@ def bronze_pasted_ratings():
     )
 
 
-@dp.table(comment="Meetings entered in the ratings app (meetings/W###-*.json), as-is.")
-def bronze_entered_meetings():
+@dp.table(comment="Files the ratings app saves (meetings/ and rating_changes/, W###-*.json), as-is.")
+def bronze_app_saves():
     # Meetings held after the export have no OneNote page; the app saves what the page title would
-    # have said, plus the date and the Spotify edition. They live next to the ratings tables.
+    # have said, plus the date and the Spotify edition. Each ratings save is a change record. Both
+    # live next to the ratings tables, and silver tells them apart by folder.
     exports_path = spark.conf.get("album_club.onenote_exports_path")  # noqa: F821
     return (
         spark.readStream.format("cloudFiles")  # noqa: F821

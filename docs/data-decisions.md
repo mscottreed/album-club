@@ -15,24 +15,34 @@ the enrichment in post 5 implement these rules.
 - A ratings table filled in on a page after the export can be copied from OneNote as
   tab-separated text into `ratings_tables/W###.tsv` in the same volume (W153 and W156). It's
   for meetings from before this project started; later ones go in the app (post 7).
-- The ratings app saves the same kind of file, `ratings_tables/W###-<timestamp>.tsv`, and goes
-  through the same rules. For each week, person (or name as written, for someone not in the
-  people seed) and listen, the row from the newest file wins over older files and the page.
-  Files are never overwritten, so every save is kept.
+- Each save in the ratings app is a change record, `rating_changes/W###-<timestamp>.json`: the
+  week, when it was saved (UTC), who saved it (a person from the people seed, or `host`, never an
+  email), and each row that changed with its rating and favorites before (`from`) and after
+  (`to`). A row that's the same as before isn't saved. Before post 8 the app saved
+  `ratings_tables/W###-<timestamp>.tsv` like a pasted table; those files still count.
+- For each week, person (or name as written, for someone not in the people seed) and listen, the
+  newest saved row wins over older ones and the page. Newest means when it was saved: the time in
+  the change record, or in the file name, or when the file was written for a name without one
+  (`W153.tsv`). Not when the file was written, so change records copied from dev to prod later keep
+  their place, and copying one again changes nothing. Files are never overwritten, so every save is
+  kept. `silver_rating_changes` lists every change.
+- A change whose `from` isn't the value it replaced (the newest saved row before it, or the page's)
+  still applies, and goes in `silver_review` to check. That's what a change replayed onto prod
+  after prod has moved on looks like.
 - A meeting with no OneNote page is entered in the app as `meetings/W###-<timestamp>.json`:
   week, date, artist, album, year and the Spotify album ID. The newest file per week is used,
   and only for weeks with no page. One ratings file applies to every page of its week, so the
   app is for one-album weeks. It turns down a rating marked `(A)` or `(P)`, and a member can't
   open a week with more than one listen (W003, W107, W109, W122, W133).
 - A return or tab inside a pasted rating or favorites cell becomes a space, so the cell stays on
-  its row of the file.
-- Members change their own rating in the app (post 8). Each save is a file with one row, theirs,
-  so the newest-row rule replaces only their rating. The app knows who someone is from
-  `members.csv` in the same volume: `email,person`, one line per member, with the person as
-  written in the people seed (a header line is optional). It holds the members' sign-in emails, so it's kept in the volume
-  and a gitignored local `data/` folder, never in git. The pipeline doesn't read it (Auto Loader
-  only picks up `.mht`, `.tsv` and `.json` files). A line whose person isn't in the seed is
-  ignored, and an email that isn't listed gets no form.
+  its row.
+- Members change their own rating in the app (post 8). Their change record names only them, so
+  it changes only their rating. The app knows who someone is from `members.csv` in the same
+  volume: `email,person`, one line per member, with the person as written in the people seed (a
+  header line is optional). It holds the members' sign-in emails, so it's kept in the volume and
+  a gitignored local `data/` folder, never in git. The pipeline doesn't read it (Auto Loader only
+  picks up `.mht`, `.tsv` and `.json` files). A line whose person isn't in the seed is ignored,
+  and an email that isn't listed gets no form.
 
 ## Pages
 

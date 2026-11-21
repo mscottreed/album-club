@@ -4,10 +4,13 @@ import json
 import pytest
 
 from album_club.app_entries import (
+    apply_changes,
+    change_file,
     check_rows,
     file_name,
     meeting_file,
     members_by_email,
+    rating_changes,
     ratings_file,
     spotify_album_id,
 )
@@ -90,3 +93,35 @@ def test_members_by_email():
 
 def test_members_by_email_without_a_header():
     assert members_by_email("alex@example.com,Alex B\n", PEOPLE) == {"alex@example.com": "Alex B"}
+
+
+def test_rating_changes_keeps_only_rows_that_changed():
+    current = {"Alex B": ("7", "3, 1"), "Sam C": ("6", "")}
+    rows = [("Alex B", "7", "3,  1\n"), ("Sam C", "6.5", ""), ("Pat Q", "8", "2")]
+    assert rating_changes(rows, current) == [
+        {"name": "Sam C", "from": {"rating": "6", "favorites": ""}, "to": {"rating": "6.5", "favorites": ""}},
+        {"name": "Pat Q", "from": {"rating": "", "favorites": ""}, "to": {"rating": "8", "favorites": "2"}},
+    ]
+
+
+def test_change_file():
+    saved_at = dt.datetime(2026, 11, 21, 20, 23, 49, 213872, tzinfo=dt.UTC)
+    changes = [{"name": "Alex B", "from": {"rating": "7", "favorites": ""}, "to": {"rating": "7.5", "favorites": ""}}]
+    assert json.loads(change_file(24, saved_at, "Alex B", changes)) == {
+        "week": 24,
+        "saved_at": "2026-11-21T20:23:49.213872+00:00",
+        "saved_by": "Alex B",
+        "changes": changes,
+    }
+
+
+def test_apply_changes_in_the_order_they_were_saved():
+    def save(at, rating):
+        changes = [
+            {"name": "Alex B", "from": {"rating": "", "favorites": ""}, "to": {"rating": rating, "favorites": ""}}
+        ]
+        return change_file(24, dt.datetime(2026, 11, 21, at, tzinfo=dt.UTC), "Alex B", changes)
+
+    current = {"Alex B": ("6", "1"), "Sam C": ("7", "")}
+    # the later save wins even when its file is read first
+    assert apply_changes(current, [save(21, "8"), save(20, "7.5")]) == {"Alex B": ("8", ""), "Sam C": ("7", "")}

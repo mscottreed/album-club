@@ -12,6 +12,7 @@ from pyspark.sql import functions as F
 
 import album_club
 from album_club import seeds
+from album_club.app_entries import HEADER
 from album_club.meeting_dates import assign_meeting_dates
 from album_club.meeting_page import parse_meeting_page, parse_pasted_table
 
@@ -54,6 +55,24 @@ SELECTION_METHOD = (
 ENTERED_MEETING = "week int, meeting_date date, artist string, album string, year int, spotify_album_id string"
 # A meeting entered in the app has no OneNote page; its page_number is this plus the week.
 APP_PAGE_NUMBERS = 100_000
+VALUE = "struct<rating:string, favorites:string>"
+RATING_CHANGE = (
+    f"week int, saved_at string, saved_by string, changes array<struct<name:string, from:{VALUE}, to:{VALUE}>>"
+)
+
+
+def _saved_at():
+    """When a file was saved: the UTC time in its name (W160-20261116T152416553011.json), or when it was
+    written if the name has none (W153.tsv). A copied file keeps its name, so it keeps its place."""
+    stamp = F.regexp_extract("source_file", r"-(\d{8}T\d{12})\.\w+$", 1)
+    return F.when(stamp != "", F.to_timestamp(F.concat(stamp, F.lit("Z")), "yyyyMMdd'T'HHmmssSSSSSSX")).otherwise(
+        F.col("source_file_modified_at")
+    )
+
+
+def _one_line(column):
+    """A rating or favorites cell compared as the app writes it: whitespace runs as one space."""
+    return F.trim(F.regexp_replace(F.coalesce(column, F.lit("")), r"[\s\u00a0]+", " "))
 
 
 @dp.temporary_view(comment="Meeting pages from the newest export, parsed, and meetings entered in the app.")
@@ -98,12 +117,13 @@ def meeting_pages():
 
 
 def _entered_meetings():
-    """Meetings entered in the app, shaped like a parsed page. The newest file for a week wins."""
-    newest = Window.partitionBy("week").orderBy(F.desc("source_file_modified_at"))
+    """Meetings entered in the app, shaped like a parsed page. The newest save for a week wins."""
+    newest = Window.partitionBy("week").orderBy(F.desc("saved_at"))
     return (
-        spark.read.table("bronze_entered_meetings")  # noqa: F821
-        .select("source_file_modified_at", F.from_json("text", ENTERED_MEETING).alias("m"))
-        .select("source_file_modified_at", "m.*")
+        spark.read.table("bronze_app_saves")  # noqa: F821
+        .where(F.col("source_file").contains("/meetings/"))
+        .select(_saved_at().alias("saved_at"), F.from_json("text", ENTERED_MEETING).alias("m"))
+        .select("saved_at", "m.*")
         .withColumn("n", F.row_number().over(newest))
         .where("n = 1")
         .select(
@@ -125,18 +145,67 @@ def _entered_meetings():
     )
 
 
-@dp.temporary_view(comment="Rows from ratings tables saved as files, pasted from OneNote or written by the app.")
-def rating_rows():
-    """For each week, person and listen, the row from the newest file wins. A file's week comes
-    from its name: ratings_tables/W153.tsv, or W160-20261115T190503120000.tsv from the app."""
-    rows = (
+@dp.temporary_view(comment="Every ratings row saved as a file, with when it was saved: pasted tables and app changes.")
+def file_rows():
+    """Ratings tables copied from OneNote (ratings_tables/W153.tsv, or W159-<time>.tsv from the app
+    before it saved changes), and each change the app saved, read like a one-row ratings table so it
+    goes through the same parser. A change also has who saved it and the value it replaced."""
+    none = F.lit(None).cast("string")
+    pasted = (
         spark.read.table("bronze_pasted_ratings")  # noqa: F821
         .withColumn("week", F.regexp_extract("source_file", r"/W(\d{3})[^/]*\.tsv$", 1).cast("int"))
         .where("week IS NOT NULL")
-        .select("week", "source_file_modified_at", F.explode(parse_pasted_table_udf("week", "text")).alias("r"))
+        .select(
+            "week",
+            _saved_at().alias("saved_at"),
+            none.alias("saved_by"),
+            none.alias("from_rating"),
+            none.alias("from_favorites"),
+            "source_file",
+            "text",
+        )
     )
-    newest = Window.partitionBy("week", _response_key(), "r.listen").orderBy(F.desc("source_file_modified_at"))
-    return rows.withColumn("n", F.row_number().over(newest)).where("n = 1").select("week", "r")
+    changes = (
+        spark.read.table("bronze_app_saves")  # noqa: F821
+        .where(F.col("source_file").contains("/rating_changes/"))
+        .select("source_file", F.from_json("text", RATING_CHANGE).alias("c"))
+        .select("source_file", "c.week", "c.saved_at", "c.saved_by", F.explode("c.changes").alias("change"))
+        .select(
+            "week",
+            F.col("saved_at").cast("timestamp").alias("saved_at"),
+            "saved_by",
+            F.col("change.from.rating").alias("from_rating"),
+            F.col("change.from.favorites").alias("from_favorites"),
+            "source_file",
+            F.concat(
+                F.lit("\t".join(HEADER) + "\n"),
+                F.concat_ws("\t", "change.name", "change.to.rating", "change.to.favorites"),
+                F.lit("\n"),
+            ).alias("text"),
+        )
+    )
+    return pasted.unionByName(changes).select(
+        "week",
+        "saved_at",
+        "saved_by",
+        "from_rating",
+        "from_favorites",
+        "source_file",
+        F.explode(parse_pasted_table_udf("week", "text")).alias("r"),
+    )
+
+
+@dp.temporary_view(comment="For each week, person and listen, the newest saved row.")
+def rating_rows():
+    """The newest by when it was saved, not when the file was written, so replaying files copied
+    from another environment keeps them in order."""
+    newest = Window.partitionBy("week", _response_key(), "r.listen").orderBy(F.desc("saved_at"))
+    return (
+        spark.read.table("file_rows")  # noqa: F821
+        .withColumn("n", F.row_number().over(newest))
+        .where("n = 1")
+        .select("week", "r")
+    )
 
 
 def _response_key():
@@ -283,6 +352,28 @@ def silver_ratings():
     )
 
 
+@dp.materialized_view(
+    comment="Every rating change saved in the app: who saved it, when, and the values before and after."
+)
+def silver_rating_changes():
+    return (
+        spark.read.table("file_rows")  # noqa: F821
+        .where(F.col("source_file").contains("/rating_changes/"))
+        .select(
+            "week",
+            "saved_at",
+            "saved_by",
+            F.col("r.name_as_written").alias("name"),
+            F.col("r.person").alias("person"),
+            "from_rating",
+            F.col("r.rating_raw").alias("to_rating"),
+            "from_favorites",
+            F.col("r.favorites_raw").alias("to_favorites"),
+            "source_file",
+        )
+    )
+
+
 @dp.materialized_view(comment="Ranked favorite tracks: rank 1 is the person's top favorite.")
 def silver_favorites():
     responses = spark.read.table("responses").select("week", "page_number", "r.*")  # noqa: F821
@@ -322,4 +413,56 @@ def silver_review():
         .agg(F.array_join(F.collect_list(F.concat_ws("-", "disc", "track")), ", ").alias("tracks"))
         .select("week", "person", F.format_string("not on the Spotify edition: track %s", "tracks").alias("reason"))
     )
-    return pages.unionByName(responses).unionByName(dates).unionByName(matches).unionByName(missing_tracks)
+    return (
+        pages.unionByName(responses)
+        .unionByName(dates)
+        .unionByName(matches)
+        .unionByName(missing_tracks)
+        .unionByName(_changes_that_did_not_match())
+    )
+
+
+def _changes_that_did_not_match():
+    """A saved change whose "from" isn't the value it replaced: the newest saved row before it, or the
+    page's row. It still applies, since it's newer, but someone should check it. It happens when a
+    change from dev is replayed onto prod after prod has changed."""
+    before = Window.partitionBy("week", "key", "listen").orderBy("saved_at")
+    rows = (
+        spark.read.table("file_rows")  # noqa: F821
+        .withColumn("key", _response_key())
+        .withColumn("listen", F.col("r.listen"))
+        .withColumn("is_first", F.row_number().over(before) == 1)
+        .withColumn("prev_rating", F.lag("r.rating_raw").over(before))
+        .withColumn("prev_favorites", F.lag("r.favorites_raw").over(before))
+    )
+    page_rows = (
+        spark.read.table("meeting_pages")  # noqa: F821
+        .select("week", F.explode("responses").alias("r"))
+        .select(
+            "week",
+            _response_key().alias("key"),
+            F.col("r.listen").alias("listen"),
+            F.col("r.rating_raw").alias("page_rating"),
+            F.col("r.favorites_raw").alias("page_favorites"),
+        )
+    )
+    was_rating = _one_line(F.when(F.col("is_first"), F.col("page_rating")).otherwise(F.col("prev_rating")))
+    was_favorites = _one_line(F.when(F.col("is_first"), F.col("page_favorites")).otherwise(F.col("prev_favorites")))
+    return (
+        rows.where(F.col("source_file").contains("/rating_changes/"))
+        .join(page_rows, ["week", "key", "listen"], "left")
+        .where((_one_line(F.col("from_rating")) != was_rating) | (_one_line(F.col("from_favorites")) != was_favorites))
+        .select(
+            "week",
+            F.col("r.name_as_written").alias("person"),
+            F.format_string(
+                "change saved %s by %s expected '%s' / '%s' but it was '%s' / '%s'",
+                "saved_at",
+                "saved_by",
+                _one_line(F.col("from_rating")),
+                _one_line(F.col("from_favorites")),
+                was_rating,
+                was_favorites,
+            ).alias("reason"),
+        )
+    )

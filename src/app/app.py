@@ -1,7 +1,7 @@
 """The ratings app: each member fixes their own rating, and the host enters a meeting and everyone's ratings.
 
-It saves files the pipeline reads like a ratings table copied from OneNote (album_club.app_entries),
-then starts album_club_refresh to put them on the dashboard.
+Each save is a change record with who saved it, when, and each rating before and after
+(album_club.app_entries). Then it starts album_club_refresh to put the change on the dashboard.
 """
 
 import datetime as dt
@@ -21,11 +21,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # src/, for alb
 
 from album_club import seeds
 from album_club.app_entries import (
+    apply_changes,
+    change_file,
     check_rows,
     file_name,
     meeting_file,
     members_by_email,
-    ratings_file,
+    rating_changes,
     spotify_album_id,
 )
 
@@ -79,6 +81,21 @@ def recorded_ratings(week: int) -> dict[str, tuple[str, str]]:
     return {r["person"]: (r["rating_raw"] or "", r["favorites_raw"] or "") for r in rows}
 
 
+def saved_changes(week: int) -> list[str]:
+    """The change records saved for a week, including any the pipeline hasn't picked up yet."""
+    try:
+        entries = WorkspaceClient().files.list_directory_contents(f"{EXPORTS}/rating_changes")
+        paths = [e.path for e in entries if e.name.startswith(f"W{week:03d}-")]
+    except NotFound:  # nothing saved yet
+        return []
+    return [WorkspaceClient().files.download(path).contents.read().decode() for path in paths]
+
+
+def current_ratings(week: int) -> dict[str, tuple[str, str]]:
+    """What's recorded for a week, with every saved change on top: what the next save changes from."""
+    return apply_changes(recorded_ratings(week), saved_changes(week))
+
+
 def listen_count(week: int) -> int:
     """How many albums and playlists a week had. Most weeks had one."""
     rows = query("SELECT count(DISTINCT listen_id) AS n FROM silver_ratings WHERE week = :week", {"week": week})
@@ -89,11 +106,15 @@ def save(path: str, text: str) -> None:
     WorkspaceClient().files.upload(f"{EXPORTS}/{path}", io.BytesIO(text.encode()), overwrite=False)
 
 
-def save_ratings(week: int, rows: list[tuple[str, str, str]], now: dt.datetime) -> None:
-    """Save a ratings file and start the refresh that puts it on the dashboard."""
-    save(file_name("ratings_tables", week, "tsv", now), ratings_file(rows))
+def start_refresh(week: int) -> None:
+    """Start the refresh that puts a save on the dashboard."""
     WorkspaceClient().jobs.run_now(job_id=int(os.environ["ALBUM_CLUB_REFRESH_JOB_ID"]))
     st.success(f"Saved W{week:03d} and started album_club_refresh. It will be on the dashboard in about 10 minutes.")
+
+
+def changed_rows(changes: list[dict]) -> list[tuple[str, str, str]]:
+    """The changes as (name, rating, favorites), the rows to check before saving."""
+    return [(c["name"], c["to"]["rating"], c["to"]["favorites"]) for c in changes]
 
 
 def show_problems(problems: dict[str, list[str]]) -> None:
@@ -106,7 +127,7 @@ def meeting_label(m: dict) -> str:
 
 
 def my_ratings(person: str) -> None:
-    """A member's own rating and favorite songs. The file has one row, theirs, so it replaces only their rating."""
+    """A member's own rating and favorite songs. The change record names only them, so it changes only their rating."""
     meetings = all_meetings()
     if not meetings:
         st.info("There are no meetings yet.")
@@ -118,7 +139,8 @@ def my_ratings(person: str) -> None:
     if listen_count(week) > 1:
         st.info(f"W{week:03d} had more than one album or a playlist, and the app is for one-album weeks.")
         return
-    rating, favorites = recorded_ratings(week).get(person, ("", ""))
+    current = current_ratings(week)
+    rating, favorites = current.get(person, ("", ""))
     # In a form, Enter in either box saves, the same as the Save button.
     with st.form(f"my_form_{week}"):
         rating = st.text_input("Rating", rating)
@@ -126,15 +148,19 @@ def my_ratings(person: str) -> None:
         st.caption("Favorites like `3, 1, 7` or `2, ... (x5)`, the way the OneNote pages do.")
         submitted = st.form_submit_button("Save", type="primary")
     if submitted:
-        rows = [(person, rating.strip(), favorites.strip())]
-        problems = check_rows(week, rows, PEOPLE)
+        changes = rating_changes([(person, rating, favorites)], current)
+        problems = check_rows(week, changed_rows(changes), PEOPLE)
         if problems:
             show_problems(problems)
+        elif not changes:
+            st.info("That's what's already recorded, so there's nothing to save.")
         else:
-            save_ratings(week, rows, dt.datetime.now(dt.UTC))
+            now = dt.datetime.now(dt.UTC)
+            save(file_name("rating_changes", week, "json", now), change_file(week, now, person, changes))
+            start_refresh(week)
 
 
-def enter_meeting() -> None:
+def enter_meeting(saved_by: str) -> None:
     """The host's page: a new meeting, or everyone's ratings for a recent one."""
     meetings = all_meetings()[:8]
     latest = meetings[0]["week"] if meetings else 0
@@ -149,10 +175,9 @@ def enter_meeting() -> None:
         album = st.text_input("Album")
         year = st.number_input("Year", min_value=1900, max_value=dt.date.today().year, value=None, step=1)
         link = st.text_input("Spotify album link", placeholder="https://open.spotify.com/album/...")
-        recorded = {}
     else:
         week = meetings[choices.index(choice) - 1]["week"]
-        recorded = recorded_ratings(week)
+    recorded = current_ratings(week)
 
     st.subheader("Ratings")
     st.caption(
@@ -172,7 +197,8 @@ def enter_meeting() -> None:
             for name, rating, favorites in table.fillna("").itertuples(index=False)
             if str(name).strip()
         ]
-        problems = check_rows(week, rows, PEOPLE)
+        changes = rating_changes(rows, recorded)
+        problems = check_rows(week, changed_rows(changes), PEOPLE)
         if new:
             album_id = spotify_album_id(link)
             missing = [label for label, value in [("artist", artist), ("album", album), ("year", year)] if not value]
@@ -182,6 +208,8 @@ def enter_meeting() -> None:
                 problems.setdefault("Meeting", []).append("the Spotify link has to be an album link")
         if problems:
             show_problems(problems)
+        elif not new and not changes:
+            st.info("Nothing changed, so there's nothing to save.")
         else:
             now = dt.datetime.now(dt.UTC)
             if new:
@@ -189,7 +217,9 @@ def enter_meeting() -> None:
                     file_name("meetings", week, "json", now),
                     meeting_file(week, meeting_date, artist, album, year, album_id),
                 )
-            save_ratings(week, rows, now)
+            if changes:
+                save(file_name("rating_changes", week, "json", now), change_file(week, now, saved_by, changes))
+            start_refresh(week)
 
 
 st.set_page_config(page_title="Album club ratings")
@@ -204,9 +234,9 @@ if person and host:
     with mine:
         my_ratings(person)
     with meeting:
-        enter_meeting()
+        enter_meeting(person)
 elif host:
-    enter_meeting()
+    enter_meeting("host")
 elif person:
     my_ratings(person)
 else:

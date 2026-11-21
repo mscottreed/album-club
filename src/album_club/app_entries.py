@@ -1,5 +1,6 @@
-"""The files the ratings app writes: a new meeting, and ratings tables in the same tab-separated
-form as a table copied out of OneNote, so the pipeline reads both the same way.
+"""The files the ratings app writes: a new meeting, and a change record for each save, with who saved
+it, when, and each rating's value before and after. The pipeline reads a change the same way as a
+ratings table copied out of OneNote.
 
 The rules are in docs/data-decisions.md.
 """
@@ -37,15 +38,54 @@ def meeting_file(week: int, meeting_date: dt.date, artist: str, album: str, year
     )
 
 
+def clean(cell: str) -> str:
+    """A cell on one line. A return or tab inside it, like one pasted along with a rating, would start a
+    new row or cell in a ratings table, so any run of whitespace becomes one space."""
+    return " ".join(cell.split())
+
+
 def ratings_file(rows: list[tuple[str, str, str]]) -> str:
-    """Rows of (name, rating, favorites) as a tab-separated ratings table, header first. A return or
-    tab inside a cell, like one pasted along with a rating, would start a new row or cell, so any run
-    of whitespace becomes one space."""
-    return "".join("\t".join(" ".join(cell.split()) for cell in cells) + "\n" for cells in [HEADER, *rows])
+    """Rows of (name, rating, favorites) as a tab-separated ratings table, header first."""
+    return "".join("\t".join(clean(cell) for cell in cells) + "\n" for cells in [HEADER, *rows])
+
+
+def rating_changes(rows: list[tuple[str, str, str]], current: dict[str, tuple[str, str]]) -> list[dict]:
+    """The rows that differ from what's recorded (name -> (rating, favorites)), each with its value
+    before and after. A row that's the same as before isn't a change."""
+    changes = []
+    for name, rating, favorites in rows:
+        before = tuple(clean(value) for value in current.get(name, ("", "")))
+        after = (clean(rating), clean(favorites))
+        if after != before:
+            changes.append(
+                {
+                    "name": name,
+                    "from": {"rating": before[0], "favorites": before[1]},
+                    "to": {"rating": after[0], "favorites": after[1]},
+                }
+            )
+    return changes
+
+
+def change_file(week: int, saved_at: dt.datetime, saved_by: str, changes: list[dict]) -> str:
+    """One save: the week, when (UTC), who saved it (a person, never an email) and the changes. The
+    pipeline orders changes by saved_at, not by when the file was written, so a file copied from dev
+    to prod later still lands in its place, and copying it again changes nothing."""
+    return json.dumps({"week": week, "saved_at": saved_at.isoformat(), "saved_by": saved_by, "changes": changes})
+
+
+def apply_changes(current: dict[str, tuple[str, str]], change_files: list[str]) -> dict[str, tuple[str, str]]:
+    """What's recorded, with saved changes on top in the order they were saved. The app uses it so a
+    save shows up before the refresh that puts it in silver, and so the next change starts from it."""
+    current = dict(current)
+    for record in sorted((json.loads(text) for text in change_files), key=lambda r: r["saved_at"]):
+        for change in record["changes"]:
+            current[change["name"]] = (change["to"]["rating"], change["to"]["favorites"])
+    return current
 
 
 def file_name(folder: str, week: int, extension: str, at: dt.datetime) -> str:
-    """A new file for each save, named so the newest sorts last: ratings_tables/W160-20261115T190503120000.tsv."""
+    """A new file for each save, named so the newest sorts last: rating_changes/W160-20261115T190503120000.json."""
     return f"{folder}/W{week:03d}-{at:%Y%m%dT%H%M%S%f}.{extension}"
 
 
