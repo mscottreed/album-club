@@ -6,8 +6,8 @@ resources:
       comment: Album club data, from raw OneNote exports to gold tables.
       # In prod the CI service principal owns the schema, so I need a grant to upload exports and
       # query tables. Grants on a schema apply to its volumes and tables too. The schema holds the
-      # raw export, with full names, so the grant goes to me, not to club members. When this grant
-      # moved off 'account users', that one had to be revoked by hand.
+      # raw export, with full names, so the grant goes to me, not to club members. Each deploy sets
+      # the schema's grants to exactly this list.
       grants:
         - principal: ${var.admin_user}
           privileges: [USE_SCHEMA, SELECT, READ_VOLUME, WRITE_VOLUME]

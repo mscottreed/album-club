@@ -288,10 +288,6 @@ Now every query is a plain string with parameters:
 query("SELECT person, rating_raw, favorites_raw FROM silver_ratings WHERE week = :week", {"week": week})
 ```
 
-It also flagged a secret being logged and a possible server-side request forgery. Those are false
-positives. The app doesn't log any secrets, and the only host it connects to is the workspace's own,
-so I left them.
-
 ## The dashboard kept its old numbers
 
 After my first changes in prod, the refresh finished and every table had the new ratings, but the
@@ -346,7 +342,28 @@ alone. `silver_ratings` still has 1,068 rows with the same ratings, `fact_rating
 and `silver_review` is empty. `silver_rating_changes` is there with nothing in it, waiting for
 the first change in prod.
 
-<!-- TODO: the first changes in prod (mine, then a member's) -->
+Then I went through my own ratings in prod and changed seven of them, two with new favorite songs
+too. The first one hit the job permission error from earlier. Once that was fixed, all seven came
+through in `silver_rating_changes` with my name and save times, and `silver_review` stayed empty,
+so every `from` matched what prod had recorded.
+
+After the permission fix I started a refresh by hand for the first change, and while it ran I saved
+the other six. Each of those saves started a refresh of its own, and since prod runs the job one at
+a time, all six queued up behind the one that was running. That run picked up all seven changes,
+which left six full refreshes of about 11 minutes each with nothing new to do. Now the app checks for a run that's already queued before it starts one:
+
+```python
+runs = jobs.list_runs(job_id=job_id, active_only=True)
+if any(r.state.life_cycle_state == RunLifeCycleState.QUEUED for r in runs):
+    st.success(f"Saved W{week:03d}. A refresh is already waiting to start, and it will pick this up.")
+    return
+jobs.run_now(job_id=job_id)
+```
+
+A run that's already going might have read the volume before the save, so that case still starts
+a new one, and it waits its turn. The same `try` catches a refresh that can't start, like the
+permission error, and tells the member their rating is saved but will show up after the next
+refresh, instead of showing them a traceback.
 
 ## Next: running things on a schedule
 

@@ -303,8 +303,8 @@ through a variable in `databricks.yml`:
           privileges: [USE_SCHEMA, SELECT, READ_VOLUME, WRITE_VOLUME]
 ```
 
-The bundle adds grants but doesn't revoke ones it no longer lists, so after deploying that I
-revoked the old `account users` grant by hand on both the dev and prod schemas.
+Each deploy sets the schema's grants to exactly this list, so the old `account users` grant is
+gone from both the dev and prod schemas.
 
 ## Next: an app for entering this week's ratings
 
