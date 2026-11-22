@@ -6,6 +6,7 @@ Each save is a change record with who saved it, when, and each rating before and
 
 import datetime as dt
 import io
+import logging
 import os
 import sys
 from pathlib import Path
@@ -15,7 +16,8 @@ import streamlit as st
 from databricks import sql
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.core import Config
-from databricks.sdk.errors import NotFound
+from databricks.sdk.errors import DatabricksError, NotFound
+from databricks.sdk.service.jobs import RunLifeCycleState
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # src/, for album_club
 
@@ -39,6 +41,7 @@ PEOPLE = seeds.people()
 MEMBERS = [p["person"] for p in PEOPLE if p["role"] == "member"]
 
 config = Config()
+log = logging.getLogger(__name__)
 
 
 def query(statement: str, params: dict | None = None) -> list[dict]:
@@ -107,8 +110,20 @@ def save(path: str, text: str) -> None:
 
 
 def start_refresh(week: int) -> None:
-    """Start the refresh that puts a save on the dashboard."""
-    WorkspaceClient().jobs.run_now(job_id=int(os.environ["ALBUM_CLUB_REFRESH_JOB_ID"]))
+    """Start the refresh that puts a save on the dashboard. A run that's queued hasn't read the
+    volume yet, so when one is waiting it will pick this save up, and another run would only repeat it."""
+    jobs = WorkspaceClient().jobs
+    job_id = int(os.environ["ALBUM_CLUB_REFRESH_JOB_ID"])
+    try:
+        runs = jobs.list_runs(job_id=job_id, active_only=True)
+        if any(r.state.life_cycle_state == RunLifeCycleState.QUEUED for r in runs):
+            st.success(f"Saved W{week:03d}. A refresh is already waiting to start, and it will pick this up.")
+            return
+        jobs.run_now(job_id=job_id)
+    except DatabricksError:
+        log.exception("Couldn't start album_club_refresh")  # in the app's logs, for the host
+        st.warning(f"Saved W{week:03d}, but the refresh didn't start. It will be on the dashboard after the next one.")
+        return
     st.success(f"Saved W{week:03d} and started album_club_refresh. It will be on the dashboard in about 10 minutes.")
 
 

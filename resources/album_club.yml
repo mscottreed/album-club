@@ -56,6 +56,11 @@ resources:
   jobs:
     album_club_refresh:
       name: album_club_refresh
+      # The ratings app's resources let its service principal start this job, but in prod each
+      # deploy sets the job's permissions back to the target's list and drops it, so it's listed here.
+      permissions:
+        - service_principal_name: ${resources.apps.ratings_app.service_principal_client_id}
+          level: CAN_MANAGE_RUN
       # Spotify and MusicBrainz lookups sit between two pipeline updates: the first builds
       # silver_listens, the fetch writes API responses to the api_responses volume, and the
       # second loads them into bronze and matches each listen using only those responses.
@@ -79,6 +84,14 @@ resources:
             - task_key: fetch_enrichment
           pipeline_task:
             pipeline_id: ${resources.pipelines.album_club_pipeline.id}
+        # The dashboard caches its results for up to a day, and new data doesn't clear the cache,
+        # so the last step reruns its queries.
+        - task_key: refresh_dashboard
+          depends_on:
+            - task_key: match
+          dashboard_task:
+            dashboard_id: ${resources.dashboards.album_club_dashboard.id}
+            warehouse_id: ${var.warehouse_id}
       environments:
         - environment_key: serverless
           spec:
