@@ -1,0 +1,35 @@
+resources:
+  # Free Edition stops an app 24 hours after it starts. The club meets Sunday afternoons, so the app
+  # starts Sunday morning and stops that night. Development mode pauses these schedules in dev.
+  jobs:
+    album_club_app_start:
+      name: album_club_app_start
+      schedule:
+        quartz_cron_expression: "0 0 9 ? * SUN"
+        timezone_id: America/Los_Angeles
+      tasks:
+        - task_key: start_app
+          spark_python_task:
+            python_file: ../src/app_power.py
+            parameters: [start, "--app=${resources.apps.ratings_app.name}"]
+          environment_key: serverless
+      environments:
+        - environment_key: serverless
+          spec:
+            environment_version: "6"
+
+    album_club_app_stop:
+      name: album_club_app_stop
+      schedule:
+        quartz_cron_expression: "0 0 21 ? * SUN"
+        timezone_id: America/Los_Angeles
+      tasks:
+        - task_key: stop_app
+          spark_python_task:
+            python_file: ../src/app_power.py
+            parameters: [stop, "--app=${resources.apps.ratings_app.name}"]
+          environment_key: serverless
+      environments:
+        - environment_key: serverless
+          spec:
+            environment_version: "6"
