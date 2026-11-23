@@ -61,6 +61,11 @@ resources:
       permissions:
         - service_principal_name: ${resources.apps.ratings_app.service_principal_client_id}
           level: CAN_MANAGE_RUN
+      # Each save in the app starts this job. The weekly run picks up any save whose refresh
+      # didn't start, the morning after the meeting, when the free daily compute limit has reset.
+      schedule:
+        quartz_cron_expression: "0 0 6 ? * MON"
+        timezone_id: America/Los_Angeles
       # Spotify and MusicBrainz lookups sit between two pipeline updates: the first builds
       # silver_listens, the fetch writes API responses to the api_responses volume, and the
       # second loads them into bronze and matches each listen using only those responses.

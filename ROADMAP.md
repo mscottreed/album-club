@@ -51,7 +51,8 @@ OneNote pages used to run a weekly album club, and documenting each step as it's
 
 ## Open questions
 
-- **Apps on Free Edition:** apps stop 24 hours after starting and must be restarted (maybe
-  by a scheduled job before each meeting). Max 3 apps per account.
+- ~~**Apps on Free Edition:** apps stop 24 hours after starting and must be restarted (maybe
+  by a scheduled job before each meeting). Max 3 apps per account.~~ Post 9: scheduled jobs
+  start the app Sunday morning and stop it Sunday night.
 - **Who can use the apps:** members need to sign in to the workspace to use an app. Can
   Free Edition add other users, and does everyone want a Databricks login?
